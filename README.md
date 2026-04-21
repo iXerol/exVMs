@@ -32,7 +32,7 @@ exvms export -o /path/to/export --id 304 --id 305
 Exports recordings by stable `Z_PK` ID from the `view` output. Explicit ID exports fail before copying anything if any requested ID does not exist, needs download, would overwrite a target, or would collide with another target.
 
 ```sh
-exvms export -o /path/to/export --all
+exvms export -o /path/to/export -a
 ```
 
 Exports all local-exportable recordings, skips known `needs-download` recordings, and prints a final summary.
@@ -44,14 +44,14 @@ exvms export -o /path/to/export
 Asks once for confirmation. Only exact `yes` proceeds.
 
 ```sh
-exvms export -o /path/to/export --all --jobs 4
+exvms export -o /path/to/export -a -p 4
 ```
 
 Controls export parallelism. The default is `min(4, available_parallelism)`.
 
 ```sh
-exvms export -o /path/to/export --filename-format "{id} {date:%Y-%m-%d} {title}"
-exvms export -o /path/to/export --filename-format "{datetime:%Y-%m-%dT%H-%M-%S%.3f%z} {title}"
+exvms export -o /path/to/export -f "{id} {date:%Y-%m-%d} {title}"
+exvms export -o /path/to/export -f "{datetime:%Y-%m-%dT%H-%M-%S%.3f%z} {title}"
 ```
 
 Controls the exported stem with a filename template. The source file extension is preserved automatically.
@@ -98,7 +98,7 @@ Voice Memos CloudKit placeholders do not expose a public standard iCloud Drive d
 
 ## Filename Templates
 
-`exvms export --filename-format ...` supports these fields:
+`exvms export -f ...` supports these fields:
 
 - `{id}`
 - `{title}`

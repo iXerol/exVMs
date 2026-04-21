@@ -19,11 +19,11 @@ The implementation targets these Voice Memos database stores:
 ## CLI Behavior
 
 - `exvms view` prints the active storage path, database path, and a metadata table with stable ID, title, recording time, duration, availability, store, path, folder, and database path.
-- `exvms export --output <DIR> --id <ID> [--id <ID>...]` exports explicit recordings by stable `Z_PK` ID.
-- `exvms export --output <DIR> --all` exports all local-exportable recordings and reports known `needs-download` recordings as skipped.
-- `exvms export --output <DIR>` asks once for confirmation; only exact `yes` proceeds with all-recordings behavior.
-- `exvms export ... --jobs <N>` controls bounded parallel export. The default is `min(4, available_parallelism)`.
-- `exvms export --filename-format <TEMPLATE>` customizes the exported stem with `{id}`, `{title}`, `{date:...}`, `{time:...}`, and `{datetime:...}` fields; the source extension is preserved automatically.
+- `exvms export -o, --output <DIR> --id <ID> [--id <ID>...]` exports explicit recordings by stable `Z_PK` ID.
+- `exvms export -o, --output <DIR> -a, --all` exports all local-exportable recordings and reports known `needs-download` recordings as skipped.
+- `exvms export -o, --output <DIR>` asks once for confirmation; only exact `yes` proceeds with all-recordings behavior.
+- `exvms export ... -p, --parallel <N>` controls bounded parallel export. The default is `min(4, available_parallelism)`.
+- `exvms export -f, --filename-format <TEMPLATE>` customizes the exported stem with `{id}`, `{title}`, `{date:...}`, `{time:...}`, and `{datetime:...}` fields; the source extension is preserved automatically.
 
 ## Export Rules
 
