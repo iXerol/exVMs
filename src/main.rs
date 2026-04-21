@@ -7,6 +7,7 @@ use exvms::export::{self, ExportReport, SelectionMode};
 use exvms::storage;
 use exvms::template::FilenameTemplate;
 use exvms::time;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -76,10 +77,19 @@ fn view() -> exvms::Result<()> {
     writeln!(out, "storage: {}", store.recordings_dir.display())?;
     writeln!(out, "database: {}", store.db_path.display())?;
     writeln!(out)?;
-    writeln!(
-        out,
-        "{:<6} {:<20} {:<10} {:<23} {:<18} {:<12} {:<20} {:<28} title",
-        "id", "recorded_at", "duration", "availability", "store", "path", "folder", "db_path"
+    write_table_row(
+        &mut out,
+        &[
+            ("id", 6),
+            ("recorded_at", 20),
+            ("duration", 10),
+            ("availability", 23),
+            ("store", 18),
+            ("path", 12),
+            ("folder", 20),
+            ("db_path", 28),
+        ],
+        "title",
     )?;
 
     for row in rows {
@@ -88,22 +98,42 @@ fn view() -> exvms::Result<()> {
             export::Availability::NeedsDownload(_) => "needs-download".to_string(),
             export::Availability::OutsideRecordingsDir(_) => "outside-recordings-dir".to_string(),
         };
-        writeln!(
-            out,
-            "{:<6} {:<20} {:<10} {:<23} {:<18} {:<12} {:<20} {:<28} {}",
-            row.id,
-            time::format_apple_local(row.recorded_at),
-            time::format_duration(row.duration),
-            availability,
-            row.store_kind.as_str(),
-            row.path_kind.as_str(),
-            row.folder_name.as_deref().unwrap_or(""),
-            row.db_path,
-            row.title
+        write_table_row(
+            &mut out,
+            &[
+                (&row.id.to_string(), 6),
+                (&time::format_apple_local(row.recorded_at), 20),
+                (&time::format_duration(row.duration), 10),
+                (&availability, 23),
+                (row.store_kind.as_str(), 18),
+                (row.path_kind.as_str(), 12),
+                (row.folder_name.as_deref().unwrap_or(""), 20),
+                (&row.db_path, 28),
+            ],
+            &row.title,
         )?;
     }
 
     Ok(())
+}
+
+fn write_table_row(mut out: impl Write, columns: &[(&str, usize)], tail: &str) -> io::Result<()> {
+    for (value, width) in columns {
+        write!(out, "{} ", pad_display_width(value, *width))?;
+    }
+    writeln!(out, "{tail}")
+}
+
+fn pad_display_width(value: &str, width: usize) -> String {
+    let display_width = UnicodeWidthStr::width_cjk(value);
+    if display_width >= width {
+        value.to_string()
+    } else {
+        let mut out = String::with_capacity(value.len() + (width - display_width));
+        out.push_str(value);
+        out.push_str(&" ".repeat(width - display_width));
+        out
+    }
 }
 
 fn export_cmd(
@@ -190,4 +220,24 @@ fn print_report(report: &ExportReport) -> exvms::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pad_display_width_counts_cjk_as_double_width() {
+        let padded = pad_display_width("録音", 6);
+        assert_eq!(UnicodeWidthStr::width_cjk(padded.as_str()), 6);
+        assert_eq!(padded, "録音  ");
+    }
+
+    #[test]
+    fn pad_display_width_preserves_longer_values() {
+        assert_eq!(
+            pad_display_width("outside-recordings-dir", 12),
+            "outside-recordings-dir"
+        );
+    }
 }
