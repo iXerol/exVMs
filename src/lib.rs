@@ -22,12 +22,14 @@ pub enum ExvmsError {
         table: &'static str,
         columns: Vec<&'static str>,
     },
+    #[error("unsupported Voice Memos database schema: {0}")]
+    UnsupportedDatabase(String),
     #[error("recording id(s) not found: {0:?}")]
     MissingIds(Vec<i64>),
     #[error(
-        "recording id(s) are cloud-only or incomplete and cannot be exported: {0:?}. Open/download them in Voice Memos.app first"
+        "recording id(s) need download or are incomplete and cannot be exported: {0:?}. Open/download them in Voice Memos.app first"
     )]
-    CloudOnlyRequested(Vec<i64>),
+    NeedsDownloadRequested(Vec<i64>),
     #[error("no local-exportable recordings were selected")]
     NoExportableRecordings,
     #[error("unsafe source path for recording {id}: {path}")]
