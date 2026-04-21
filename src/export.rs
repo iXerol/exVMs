@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
@@ -6,7 +7,7 @@ use std::sync::Mutex;
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
 
-use crate::db::Recording;
+use crate::db::{Recording, RecordingPathKind};
 use crate::macos;
 use crate::sanitize;
 use crate::time;
@@ -21,7 +22,8 @@ pub enum SelectionMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Availability {
     Local,
-    CloudOnly(String),
+    NeedsDownload(String),
+    OutsideRecordingsDir(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -62,16 +64,16 @@ pub fn plan_exports(
     let selected = select_recordings(recordings, requested_ids)?;
     let mut planned = Vec::new();
     let mut skipped = Vec::new();
-    let mut cloud_only_requested = Vec::new();
+    let mut needs_download_requested = Vec::new();
 
     for recording in selected {
         match ensure_exportable_availability(recordings_dir, recording)? {
             Availability::Local => {
                 planned.push(plan_single(recordings_dir, output_dir, recording)?);
             }
-            Availability::CloudOnly(reason) => {
+            Availability::NeedsDownload(reason) => {
                 if mode == SelectionMode::ExplicitIds {
-                    cloud_only_requested.push(recording.id);
+                    needs_download_requested.push(recording.id);
                     continue;
                 }
                 skipped.push(SkippedRecording {
@@ -79,14 +81,20 @@ pub fn plan_exports(
                     reason,
                 });
             }
+            Availability::OutsideRecordingsDir(path) => {
+                return Err(ExvmsError::UnsafeSourcePath {
+                    id: recording.id,
+                    path,
+                });
+            }
         }
     }
 
-    if !cloud_only_requested.is_empty() {
-        return Err(ExvmsError::CloudOnlyRequested(cloud_only_requested));
+    if !needs_download_requested.is_empty() {
+        return Err(ExvmsError::NeedsDownloadRequested(needs_download_requested));
     }
 
-    if planned.is_empty() {
+    if planned.is_empty() && (mode == SelectionMode::ExplicitIds || skipped.is_empty()) {
         return Err(ExvmsError::NoExportableRecordings);
     }
 
@@ -174,43 +182,50 @@ fn select_recordings<'a>(
 }
 
 pub fn classify_availability(recordings_dir: &Path, recording: &Recording) -> Result<Availability> {
-    classify_availability_inner(recordings_dir, recording, false)
+    classify_availability_inner(recordings_dir, recording, true)
 }
 
 pub fn ensure_exportable_availability(
     recordings_dir: &Path,
     recording: &Recording,
 ) -> Result<Availability> {
-    classify_availability_inner(recordings_dir, recording, true)
+    let availability = classify_availability_inner(recordings_dir, recording, false)?;
+    if let Availability::OutsideRecordingsDir(path) = &availability {
+        return Err(ExvmsError::UnsafeSourcePath {
+            id: recording.id,
+            path: path.clone(),
+        });
+    }
+    Ok(availability)
 }
 
 fn classify_availability_inner(
     recordings_dir: &Path,
     recording: &Recording,
-    allow_download: bool,
+    report_unsafe_as_status: bool,
 ) -> Result<Availability> {
-    let source = resolve_source(recordings_dir, recording)?;
+    if recording.path_kind == RecordingPathKind::Missing {
+        return Ok(Availability::NeedsDownload(
+            "database path is empty; open/download it in Voice Memos.app first".to_string(),
+        ));
+    }
+
+    let source = match resolve_source(recordings_dir, recording) {
+        Ok(source) => source,
+        Err(ExvmsError::UnsafeSourcePath { path, .. }) if report_unsafe_as_status => {
+            return Ok(Availability::OutsideRecordingsDir(path));
+        }
+        Err(err) => return Err(err),
+    };
+
     match source.metadata() {
         Ok(meta) if meta.len() > 0 => Ok(Availability::Local),
-        Ok(_) => {
-            if allow_download && macos::try_download_ubiquitous(&source)? {
-                Ok(Availability::Local)
-            } else {
-                Ok(Availability::CloudOnly(
-                    "local file is 0 bytes and is not a downloadable ubiquitous item; open/download it in Voice Memos.app first".to_string(),
-                ))
-            }
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            if allow_download && macos::try_download_ubiquitous(&source)? {
-                Ok(Availability::Local)
-            } else {
-                Ok(Availability::CloudOnly(
-                    "local audio file is missing; open/download it in Voice Memos.app first"
-                        .to_string(),
-                ))
-            }
-        }
+        Ok(_) => Ok(Availability::NeedsDownload(
+            "local audio file is 0 bytes; open/download it in Voice Memos.app first".to_string(),
+        )),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Availability::NeedsDownload(
+            "local audio file is missing; open/download it in Voice Memos.app first".to_string(),
+        )),
         Err(err) => Err(ExvmsError::Availability {
             id: recording.id,
             message: err.to_string(),
@@ -255,21 +270,159 @@ fn plan_single(
 }
 
 fn resolve_source(recordings_dir: &Path, recording: &Recording) -> Result<PathBuf> {
-    let relative = Path::new(&recording.relative_path);
-    if relative.is_absolute()
-        || relative.components().any(|component| {
-            matches!(
-                component,
-                Component::ParentDir | Component::RootDir | Component::Prefix(_)
-            )
-        })
-    {
-        return Err(ExvmsError::UnsafeSourcePath {
+    match recording.path_kind {
+        RecordingPathKind::Missing => Err(ExvmsError::UnsafeSourcePath {
             id: recording.id,
-            path: recording.relative_path.clone(),
+            path: recording.db_path.clone(),
+        }),
+        RecordingPathKind::Relative => {
+            resolve_relative_source(recordings_dir, recording.id, &recording.db_path)
+        }
+        RecordingPathKind::Absolute => {
+            resolve_legacy_absolute_source(recordings_dir, recording.id, &recording.db_path)
+        }
+    }
+}
+
+fn resolve_relative_source(recordings_dir: &Path, id: i64, raw_path: &str) -> Result<PathBuf> {
+    let relative = Path::new(raw_path);
+    if relative.is_absolute() || has_escape_component(relative) {
+        return Err(ExvmsError::UnsafeSourcePath {
+            id,
+            path: raw_path.to_string(),
         });
     }
     Ok(recordings_dir.join(relative))
+}
+
+fn resolve_legacy_absolute_source(
+    recordings_dir: &Path,
+    id: i64,
+    raw_path: &str,
+) -> Result<PathBuf> {
+    let original = Path::new(raw_path);
+    if !original.is_absolute() {
+        return resolve_relative_source(recordings_dir, id, raw_path);
+    }
+
+    if let Ok(relative) = original.strip_prefix(recordings_dir)
+        && !has_escape_component(relative)
+    {
+        return Ok(recordings_dir.join(relative));
+    }
+
+    if let Some(relative) = relative_tail_after_recordings_dir(original, recordings_dir) {
+        return Ok(recordings_dir.join(relative));
+    }
+
+    if let Some(file_name) = original.file_name() {
+        let candidate = recordings_dir.join(file_name);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(ExvmsError::UnsafeSourcePath {
+        id,
+        path: raw_path.to_string(),
+    })
+}
+
+fn has_escape_component(path: &Path) -> bool {
+    path.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    })
+}
+
+fn relative_tail_after_recordings_dir(original: &Path, recordings_dir: &Path) -> Option<PathBuf> {
+    let original_components = normal_components(original);
+    let recordings_dir_components = normal_components(recordings_dir);
+
+    if let (Some(original_user), Some(recordings_user)) = (
+        user_component(&original_components),
+        user_component(&recordings_dir_components),
+    ) && original_user != recordings_user
+    {
+        return None;
+    }
+
+    for suffix in known_recordings_suffixes() {
+        let Some(index) = find_subsequence(&original_components, suffix) else {
+            continue;
+        };
+        let tail = &original_components[index + suffix.len()..];
+        if tail.is_empty() {
+            return None;
+        }
+        let relative = path_from_components(tail);
+        if !has_escape_component(&relative) {
+            return Some(relative);
+        }
+    }
+
+    None
+}
+
+fn known_recordings_suffixes() -> &'static [&'static [&'static str]] {
+    &[
+        &[
+            "Library",
+            "Group Containers",
+            "group.com.apple.VoiceMemos.shared",
+            "Recordings",
+        ],
+        &[
+            "Library",
+            "Containers",
+            "Voice Memos",
+            "Data",
+            "Library",
+            "Application Support",
+            "Recordings",
+        ],
+        &[
+            "Library",
+            "Application Support",
+            "com.apple.voicememos",
+            "Recordings",
+        ],
+    ]
+}
+
+fn normal_components(path: &Path) -> Vec<OsString> {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(value) => Some(value.to_os_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn user_component(components: &[OsString]) -> Option<&OsString> {
+    components
+        .windows(2)
+        .find(|window| window[0] == OsStr::new("Users"))
+        .map(|window| &window[1])
+}
+
+fn find_subsequence(components: &[OsString], suffix: &[&str]) -> Option<usize> {
+    components.windows(suffix.len()).position(|window| {
+        window
+            .iter()
+            .zip(suffix)
+            .all(|(component, expected)| component == OsStr::new(expected))
+    })
+}
+
+fn path_from_components(components: &[OsString]) -> PathBuf {
+    let mut path = PathBuf::new();
+    for component in components {
+        path.push(component);
+    }
+    path
 }
 
 fn validate_targets(planned: &[PlannedExport]) -> Result<()> {
@@ -304,9 +457,17 @@ pub fn default_jobs() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::RecordingStoreKind;
     use std::io::Write;
 
     fn recording(id: i64, title: &str, rel: &str, folder: Option<&str>) -> Recording {
+        let path_kind = if rel.is_empty() {
+            RecordingPathKind::Missing
+        } else if Path::new(rel).is_absolute() {
+            RecordingPathKind::Absolute
+        } else {
+            RecordingPathKind::Relative
+        };
         Recording {
             id,
             title: title.to_string(),
@@ -314,7 +475,9 @@ mod tests {
             duration: 1.0,
             local_duration: 1.0,
             eviction_date: None,
-            relative_path: rel.to_string(),
+            db_path: rel.to_string(),
+            path_kind,
+            store_kind: RecordingStoreKind::CloudRecordings,
             folder_id: folder.map(|_| 1),
             folder_name: folder.map(ToOwned::to_owned),
         }
@@ -349,7 +512,7 @@ mod tests {
             SelectionMode::ExplicitIds,
         )
         .unwrap_err();
-        assert!(matches!(err, ExvmsError::CloudOnlyRequested(ids) if ids == vec![1]));
+        assert!(matches!(err, ExvmsError::NeedsDownloadRequested(ids) if ids == vec![1]));
 
         let rows = vec![
             recording(1, "One", "one.m4a", None),
@@ -363,7 +526,7 @@ mod tests {
             SelectionMode::ExplicitIds,
         )
         .unwrap_err();
-        assert!(matches!(err, ExvmsError::CloudOnlyRequested(ids) if ids == vec![1, 2]));
+        assert!(matches!(err, ExvmsError::NeedsDownloadRequested(ids) if ids == vec![1, 2]));
     }
 
     #[test]
@@ -392,6 +555,107 @@ mod tests {
             skipped.iter().map(|row| row.id).collect::<Vec<_>>(),
             vec![2]
         );
+    }
+
+    #[test]
+    fn all_selection_skips_empty_database_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rows = vec![recording(1, "One", "", None)];
+        let err = plan_exports(
+            tmp.path(),
+            &tmp.path().join("out"),
+            &rows,
+            Some(&[1]),
+            SelectionMode::ExplicitIds,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ExvmsError::NeedsDownloadRequested(ids) if ids == vec![1]));
+
+        let (planned, skipped) = plan_exports(
+            tmp.path(),
+            &tmp.path().join("out"),
+            &rows,
+            None,
+            SelectionMode::All,
+        )
+        .unwrap();
+        assert!(planned.is_empty());
+        assert_eq!(
+            skipped.iter().map(|row| row.id).collect::<Vec<_>>(),
+            vec![1]
+        );
+    }
+
+    #[test]
+    fn view_classification_reports_unsafe_path_without_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let row = recording(1, "One", "../one.m4a", None);
+        let availability = classify_availability(tmp.path(), &row).unwrap();
+        assert!(
+            matches!(availability, Availability::OutsideRecordingsDir(path) if path == "../one.m4a")
+        );
+    }
+
+    #[test]
+    fn export_preflight_rejects_unsafe_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rows = vec![recording(1, "One", "../one.m4a", None)];
+        let err = plan_exports(
+            tmp.path(),
+            &tmp.path().join("out"),
+            &rows,
+            None,
+            SelectionMode::All,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ExvmsError::UnsafeSourcePath { .. }));
+    }
+
+    #[test]
+    fn legacy_absolute_path_maps_to_backup_recordings_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let recordings_dir = tmp
+            .path()
+            .join("Volumes/Restore_iMac/Users/example/Library/Application Support/com.apple.voicememos/Recordings");
+        fs::create_dir_all(&recordings_dir).unwrap();
+        let mut source = fs::File::create(recordings_dir.join("legacy.m4a")).unwrap();
+        writeln!(source, "audio").unwrap();
+
+        let row = recording(
+            1,
+            "Legacy",
+            "/Users/example/Library/Application Support/com.apple.voicememos/Recordings/legacy.m4a",
+            None,
+        );
+        let (planned, skipped) = plan_exports(
+            &recordings_dir,
+            &tmp.path().join("out"),
+            &[row],
+            None,
+            SelectionMode::All,
+        )
+        .unwrap();
+        assert!(skipped.is_empty());
+        assert_eq!(planned[0].source, recordings_dir.join("legacy.m4a"));
+    }
+
+    #[test]
+    fn legacy_absolute_path_can_fallback_to_existing_basename() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut source = fs::File::create(tmp.path().join("legacy.m4a")).unwrap();
+        writeln!(source, "audio").unwrap();
+
+        let row = recording(1, "Legacy", "/private/old/location/legacy.m4a", None);
+        let (planned, skipped) = plan_exports(
+            tmp.path(),
+            &tmp.path().join("out"),
+            &[row],
+            None,
+            SelectionMode::All,
+        )
+        .unwrap();
+        assert!(skipped.is_empty());
+        assert_eq!(planned[0].source, tmp.path().join("legacy.m4a"));
     }
 
     #[test]

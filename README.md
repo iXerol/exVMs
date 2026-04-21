@@ -21,21 +21,21 @@ exvms view
 Prints:
 
 - active Voice Memos Recordings directory
-- `CloudRecordings.db` path
-- recording ID, title, recording time, duration, local/cloud status, folder, and relative audio path
+- selected database path
+- recording ID, title, recording time, duration, availability, store, path, folder, and database path
 
 ```sh
 exvms export --output /path/to/export --id 304
 exvms export --output /path/to/export --id 304 --id 305
 ```
 
-Exports recordings by stable `Z_PK` ID from the `view` output. Explicit ID exports fail before copying anything if any requested ID does not exist, is cloud-only/incomplete, would overwrite a target, or would collide with another target.
+Exports recordings by stable `Z_PK` ID from the `view` output. Explicit ID exports fail before copying anything if any requested ID does not exist, needs download, would overwrite a target, or would collide with another target.
 
 ```sh
 exvms export --output /path/to/export --all
 ```
 
-Exports all local-exportable recordings, skips known cloud-only/incomplete recordings, and prints a final summary.
+Exports all local-exportable recordings, skips known `needs-download` recordings, and prints a final summary.
 
 ```sh
 exvms export --output /path/to/export
@@ -51,10 +51,11 @@ Controls export parallelism. The default is `min(4, available_parallelism)`.
 
 ## Data Model
 
-The current implementation uses the verified Voice Memos schema:
+The implementation supports these Voice Memos stores:
 
-- `ZCLOUDRECORDING`: `Z_PK`, `ZENCRYPTEDTITLE`, `ZDATE`, `ZDURATION`, `ZLOCALDURATION`, `ZEVICTIONDATE`, `ZPATH`, `ZFOLDER`
-- `ZFOLDER`: `Z_PK`, `ZENCRYPTEDNAME`
+- `CloudRecordings.db` with `ZCLOUDRECORDING`
+- `Recordings.db` with `ZRECORDING`
+- `ZFOLDER` when available for folder names
 
 `ZDATE` is Apple/Core Data reference time. The tool converts it with:
 
@@ -62,7 +63,13 @@ The current implementation uses the verified Voice Memos schema:
 unix_seconds = ZDATE + 978307200
 ```
 
-`ZPATH` is treated as relative to the active Voice Memos Recordings directory.
+`view` reports:
+
+- `store`: `cloud-recordings` or `local-recordings`
+- `path`: `relative`, `absolute`, or `missing`
+- `availability`: `local`, `needs-download`, or `outside-recordings-dir`
+
+Relative `ZPATH` values are resolved under the active Voice Memos Recordings directory. Absolute `ZPATH` values are only used when they can be safely mapped back into that selected Recordings directory, including mounted backup volumes such as `/Volumes/<name>/Users/<user>/...`.
 
 ## Storage Discovery
 
@@ -78,9 +85,9 @@ If macOS denies access to Voice Memos data, grant Full Disk Access to the termin
 
 ## Cloud-Only Recordings
 
-Cloud-only or incomplete recordings are not exported. A missing or 0-byte local audio file is classified as unavailable unless macOS Foundation identifies it as a downloadable ubiquitous item.
+Cloud-only or incomplete recordings are not exported. Missing files, 0-byte files, and rows with a missing database path are classified as `needs-download`.
 
-Voice Memos CloudKit placeholders may not expose standard iCloud Drive ubiquitous metadata. In that case, `exvms` reports that the recording must be opened/downloaded in Voice Memos.app first.
+Voice Memos CloudKit placeholders do not expose a public standard iCloud Drive download path for this tool. `exvms` reports that the recording must be opened/downloaded in Voice Memos.app first. Paths that resolve outside the selected Recordings directory are reported as `outside-recordings-dir`.
 
 ## Architecture
 
@@ -88,10 +95,10 @@ Voice Memos CloudKit placeholders may not expose standard iCloud Drive ubiquitou
 
 The rest of `src/` is the Rust core library:
 
-- `db.rs`: read and validate the Voice Memos SQLite database
-- `storage.rs`: discover the active Recordings directory
+- `db.rs`: probe and read Voice Memos SQLite databases and classify store/path metadata
+- `storage.rs`: discover the active Recordings directory and database
 - `export.rs`: plan, preflight, parallelize, and execute exports
-- `macos.rs`: macOS timestamp and best-effort ubiquitous item handling
+- `macos.rs`: macOS timestamp handling
 - `sanitize.rs`: sanitize target file and folder names
 - `time.rs`: Apple/Core Data time conversion and display formatting
 - `lib.rs`: public modules and error type
