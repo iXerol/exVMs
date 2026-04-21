@@ -32,13 +32,13 @@ enum Command {
         #[arg(long = "id")]
         ids: Vec<i64>,
         /// Export every local-exportable recording, skipping recordings that need download.
-        #[arg(long)]
+        #[arg(short = 'a', long)]
         all: bool,
         /// Parallel export job count. Defaults to min(4, available parallelism).
-        #[arg(long)]
+        #[arg(short = 'p', long = "parallel")]
         jobs: Option<usize>,
         /// Filename template for exported recordings.
-        #[arg(long = "filename-format")]
+        #[arg(short = 'f', long = "filename-format")]
         filename_format: Option<String>,
     },
 }
