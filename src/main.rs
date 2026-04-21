@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use exvms::db;
 use exvms::export::{self, ExportReport, SelectionMode};
 use exvms::storage;
+use exvms::template::FilenameTemplate;
 use exvms::time;
 
 #[derive(Debug, Parser)]
@@ -36,6 +37,9 @@ enum Command {
         /// Parallel export job count. Defaults to min(4, available parallelism).
         #[arg(long)]
         jobs: Option<usize>,
+        /// Filename template for exported recordings.
+        #[arg(long = "filename-format")]
+        filename_format: Option<String>,
     },
 }
 
@@ -58,7 +62,8 @@ fn run() -> exvms::Result<()> {
             ids,
             all,
             jobs,
-        } => export_cmd(output, ids, all, jobs),
+            filename_format,
+        } => export_cmd(output, ids, all, jobs, filename_format),
     }
 }
 
@@ -101,7 +106,13 @@ fn view() -> exvms::Result<()> {
     Ok(())
 }
 
-fn export_cmd(output: PathBuf, ids: Vec<i64>, all: bool, jobs: Option<usize>) -> exvms::Result<()> {
+fn export_cmd(
+    output: PathBuf,
+    ids: Vec<i64>,
+    all: bool,
+    jobs: Option<usize>,
+    filename_format: Option<String>,
+) -> exvms::Result<()> {
     if all && !ids.is_empty() {
         return Err(exvms::ExvmsError::InvalidArguments(
             "--all cannot be combined with --id".to_string(),
@@ -115,6 +126,10 @@ fn export_cmd(output: PathBuf, ids: Vec<i64>, all: bool, jobs: Option<usize>) ->
 
     let store = storage::discover()?;
     let rows = db::load_recordings(&store.db_path)?;
+    let template = match filename_format {
+        Some(value) => FilenameTemplate::parse(&value)?,
+        None => FilenameTemplate::default_template(),
+    };
     let mode = if ids.is_empty() {
         SelectionMode::All
     } else {
@@ -125,8 +140,14 @@ fn export_cmd(output: PathBuf, ids: Vec<i64>, all: bool, jobs: Option<usize>) ->
     } else {
         Some(ids.as_slice())
     };
-    let (planned, skipped) =
-        export::plan_exports(&store.recordings_dir, &output, &rows, selected, mode)?;
+    let (planned, skipped) = export::plan_exports_with_template(
+        &store.recordings_dir,
+        &output,
+        &rows,
+        selected,
+        mode,
+        &template,
+    )?;
     let report =
         export::execute_exports(planned, skipped, jobs.unwrap_or_else(export::default_jobs));
     print_report(&report)?;

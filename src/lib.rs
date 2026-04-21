@@ -3,6 +3,7 @@ pub mod export;
 pub mod macos;
 pub mod sanitize;
 pub mod storage;
+pub mod template;
 pub mod time;
 
 use std::path::PathBuf;
@@ -42,6 +43,8 @@ pub enum ExvmsError {
     Availability { id: i64, message: String },
     #[error("invalid arguments: {0}")]
     InvalidArguments(String),
+    #[error("invalid filename format: {0}")]
+    InvalidFilenameFormat(String),
     #[error("SQLite error: {0}")]
     Sql(#[from] rusqlite::Error),
     #[error("I/O error: {0}")]
