@@ -25,29 +25,36 @@ Prints:
 - recording ID, title, recording time, duration, availability, store, path, folder, and database path
 
 ```sh
-exvms export --output /path/to/export --id 304
-exvms export --output /path/to/export --id 304 --id 305
+exvms export -o /path/to/export --id 304
+exvms export -o /path/to/export --id 304 --id 305
 ```
 
 Exports recordings by stable `Z_PK` ID from the `view` output. Explicit ID exports fail before copying anything if any requested ID does not exist, needs download, would overwrite a target, or would collide with another target.
 
 ```sh
-exvms export --output /path/to/export --all
+exvms export -o /path/to/export --all
 ```
 
 Exports all local-exportable recordings, skips known `needs-download` recordings, and prints a final summary.
 
 ```sh
-exvms export --output /path/to/export
+exvms export -o /path/to/export
 ```
 
 Asks once for confirmation. Only exact `yes` proceeds.
 
 ```sh
-exvms export --output /path/to/export --all --jobs 4
+exvms export -o /path/to/export --all --jobs 4
 ```
 
 Controls export parallelism. The default is `min(4, available_parallelism)`.
+
+```sh
+exvms export -o /path/to/export --filename-format "{id} {date:%Y-%m-%d} {title}"
+exvms export -o /path/to/export --filename-format "{datetime:%Y-%m-%dT%H-%M-%S%.3f%z} {title}"
+```
+
+Controls the exported stem with a filename template. The source file extension is preserved automatically.
 
 ## Data Model
 
@@ -88,6 +95,31 @@ If macOS denies access to Voice Memos data, grant Full Disk Access to the termin
 Cloud-only or incomplete recordings are not exported. Missing files, 0-byte files, and rows with a missing database path are classified as `needs-download`.
 
 Voice Memos CloudKit placeholders do not expose a public standard iCloud Drive download path for this tool. `exvms` reports that the recording must be opened/downloaded in Voice Memos.app first. Paths that resolve outside the selected Recordings directory are reported as `outside-recordings-dir`.
+
+## Filename Templates
+
+`exvms export --filename-format ...` supports these fields:
+
+- `{id}`
+- `{title}`
+- `{date:FORMAT}`
+- `{time:FORMAT}`
+- `{datetime:FORMAT}`
+
+`FORMAT` uses `strftime` / `chrono` directives. Useful ISO-8601-style examples:
+
+- `%Y-%m-%d`
+- `%H-%M-%S`
+- `%Y-%m-%dT%H-%M-%S%z`
+- `%Y-%m-%dT%H-%M-%S%.3f%z`
+
+Notes:
+
+- The default template is `{title}`
+- The source extension is appended automatically; do not add `.{extension}`
+- If the template does not contain `{id}` and multiple selected recordings render to the same filename, `exvms` automatically appends ` {id}` before the extension for those collisions
+- Template literals cannot contain `/` or `\`
+- Filename-unsafe characters from rendered output are sanitized, so `:` becomes `_`; prefer filesystem-safe separators like `-` in time strings
 
 ## Architecture
 

@@ -23,6 +23,7 @@ The implementation targets these Voice Memos database stores:
 - `exvms export --output <DIR> --all` exports all local-exportable recordings and reports known `needs-download` recordings as skipped.
 - `exvms export --output <DIR>` asks once for confirmation; only exact `yes` proceeds with all-recordings behavior.
 - `exvms export ... --jobs <N>` controls bounded parallel export. The default is `min(4, available_parallelism)`.
+- `exvms export --filename-format <TEMPLATE>` customizes the exported stem with `{id}`, `{title}`, `{date:...}`, `{time:...}`, and `{datetime:...}` fields; the source extension is preserved automatically.
 
 ## Export Rules
 
@@ -35,6 +36,8 @@ The implementation targets these Voice Memos database stores:
 - Full export skips known `needs-download` recordings and reports them at the end.
 - Unexpected per-file failures after preflight do not stop the whole batch; the final summary reports successes, skipped `needs-download` IDs, and failures.
 - Exported filenames come from the sanitized title fallback chain plus the source extension when needed.
+- The default export template is `{title}` and custom date/time formats use `strftime` / `chrono` directives inside `{date:...}`, `{time:...}`, and `{datetime:...}`.
+- If a template omits `{id}` and selected recordings collide, `exvms` appends ` {id}` before the extension for those in-batch collisions.
 - If a recording has `ZFOLDER`, export it under a sanitized `ZFOLDER.ZENCRYPTEDNAME` subdirectory.
 - Do not overwrite existing target files.
 - After copying, set modification time and Finder creation time to `ZDATE`.

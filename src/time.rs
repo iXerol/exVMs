@@ -1,6 +1,6 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use chrono::{DateTime, Local};
+use chrono::{DateTime, FixedOffset, Local};
 
 const APPLE_TO_UNIX_SECONDS: f64 = 978_307_200.0;
 
@@ -14,9 +14,18 @@ pub fn apple_seconds_to_system_time(apple_seconds: f64) -> SystemTime {
 }
 
 pub fn format_apple_local(apple_seconds: f64) -> String {
+    apple_local_datetime(apple_seconds)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
+}
+
+pub fn apple_local_datetime(apple_seconds: f64) -> DateTime<Local> {
     let system_time = apple_seconds_to_system_time(apple_seconds);
-    let dt: DateTime<Local> = system_time.into();
-    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+    system_time.into()
+}
+
+pub fn apple_local_fixed_offset_datetime(apple_seconds: f64) -> DateTime<FixedOffset> {
+    apple_local_datetime(apple_seconds).fixed_offset()
 }
 
 pub fn format_duration(seconds: f64) -> String {
