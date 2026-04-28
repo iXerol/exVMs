@@ -4,6 +4,8 @@
 
 `src/main.rs` is the CLI layer. It parses arguments, performs user confirmation, and formats terminal output.
 
+`docs/` contains current project documentation. `plans/` contains historical planning snapshots; do not edit older plans to match later implementation decisions.
+
 The rest of `src/` is the Rust core library:
 
 - `db.rs`: probes and reads Voice Memos SQLite databases and classifies store/path metadata
