@@ -1,0 +1,71 @@
+"app.name" = "exVMs";
+"ui.toolbar.title" = "語音備忘錄";
+"ui.toolbar.recordings_path %@" = "錄音目錄：%@";
+"ui.toolbar.no_storage" = "尚未載入儲存位置";
+"ui.toolbar.output_directory %@" = "匯出目錄：%@";
+"ui.filename.section_title" = "匯出檔名";
+"ui.filename.example.label" = "範例";
+"ui.filter.folder.label" = "資料夾";
+"ui.full_disk_access.title" = "需要完整磁碟取用權限";
+"ui.full_disk_access.message" = "exVMs 需要權限讀取本機語音備忘錄資料庫。請在「系統設定」>「隱私權與安全性」>「完整磁碟取用權限」中加入 exVMs，然後重新整理。";
+"ui.full_disk_access.status_hint" = "授予 exVMs 完整磁碟取用權限，然後重新整理。";
+
+"action.show_in_finder" = "在 Finder 中顯示";
+"action.refresh" = "重新整理";
+"action.output" = "匯出目錄";
+"action.export" = "匯出";
+"action.select_all" = "全選";
+"action.select_none" = "全不選";
+"action.show_app_in_finder" = "在 Finder 中顯示 exVMs";
+"action.open_settings" = "開啟設定";
+"action.choose" = "選擇";
+
+"filter.folder.all" = "所有資料夾";
+"folder.none" = "無資料夾";
+
+"table.column.export" = "匯出";
+"table.column.title" = "標題";
+"table.column.folder" = "資料夾";
+"table.column.recorded" = "錄製時間";
+"table.column.duration" = "時長";
+"table.column.availability" = "可用性";
+"table.column.target" = "目標";
+
+"status.items.count %lld" = "%lld 個項目";
+"status.export_summary %lld %lld %lld" = "已匯出 %lld，已略過 %lld，失敗 %lld";
+"status.choose_output_before_export" = "匯出前請選擇匯出目錄";
+
+"prompt.choose_output_directory" = "選擇匯出目錄";
+
+"availability.local" = "本機";
+"availability.needs_download" = "需要下載";
+"availability.outside_storage" = "不在儲存目錄內";
+"availability.exported" = "已匯出";
+
+"error.recordings.list_failed" = "無法列出錄音";
+"error.export.failed" = "匯出失敗";
+"error.voice_memos_access.generic" = "exVMs 無法讀取語音備忘錄資料。請將 exVMs 加入完整磁碟取用權限，然後重新整理。";
+"error.voice_memos_access.path %@" = "exVMs 無法讀取 %@ 的語音備忘錄資料。請將 exVMs 加入完整磁碟取用權限，然後重新整理。";
+
+"token.title" = "標題";
+"token.id" = "ID";
+"token.year" = "年";
+"token.month" = "月";
+"token.day" = "日";
+"token.hour" = "時";
+"token.minute" = "分";
+"token.second" = "秒";
+
+"accessibility.output.choose_directory" = "選擇匯出目錄";
+"accessibility.recordings.select_all_visible" = "選取目前可見且可匯出的錄音";
+"accessibility.recordings.select_none_visible" = "清除目前可見錄音的匯出選取";
+"accessibility.recording.export %@" = "匯出 %@";
+"accessibility.filename.example" = "檔名範例";
+"accessibility.filename.pattern" = "檔名格式";
+"accessibility.filename.pattern.help" = "輸入檔名文字，或點選上方控制項將其插入游標位置。";
+"accessibility.filename.insert_token %@" = "插入%@控制項";
+"accessibility.filename.insert_token.hint" = "將此控制項加入檔名格式的游標位置。";
+"accessibility.filename.token %@" = "%@控制項";
+"accessibility.filename.literal %@" = "文字 %@";
+
+"help.filename.insert_token %@" = "插入%@";

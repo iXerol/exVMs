@@ -1,0 +1,71 @@
+"app.name" = "exVMs";
+"ui.toolbar.title" = "Voice Memos";
+"ui.toolbar.recordings_path %@" = "Recordings: %@";
+"ui.toolbar.no_storage" = "No storage loaded";
+"ui.toolbar.output_directory %@" = "Output Directory: %@";
+"ui.filename.section_title" = "Exported Filename";
+"ui.filename.example.label" = "Example";
+"ui.filter.folder.label" = "Folder";
+"ui.full_disk_access.title" = "Full Disk Access Required";
+"ui.full_disk_access.message" = "exVMs needs permission to read the local Voice Memos database. Add exVMs in System Settings > Privacy & Security > Full Disk Access, then refresh.";
+"ui.full_disk_access.status_hint" = "Grant Full Disk Access to exVMs, then refresh.";
+
+"action.show_in_finder" = "Show in Finder";
+"action.refresh" = "Refresh";
+"action.output" = "Output";
+"action.export" = "Export";
+"action.select_all" = "Select All";
+"action.select_none" = "Select None";
+"action.show_app_in_finder" = "Show exVMs in Finder";
+"action.open_settings" = "Open Settings";
+"action.choose" = "Choose";
+
+"filter.folder.all" = "All Folders";
+"folder.none" = "No Folder";
+
+"table.column.export" = "Export";
+"table.column.title" = "Title";
+"table.column.folder" = "Folder";
+"table.column.recorded" = "Recorded";
+"table.column.duration" = "Duration";
+"table.column.availability" = "Availability";
+"table.column.target" = "Target";
+
+"status.items.count %lld" = "%lld items";
+"status.export_summary %lld %lld %lld" = "Exported %lld, skipped %lld, failed %lld";
+"status.choose_output_before_export" = "Choose an output directory before exporting";
+
+"prompt.choose_output_directory" = "Choose output directory";
+
+"availability.local" = "Local";
+"availability.needs_download" = "Needs download";
+"availability.outside_storage" = "Outside storage";
+"availability.exported" = "Exported";
+
+"error.recordings.list_failed" = "Failed to list recordings";
+"error.export.failed" = "Export failed";
+"error.voice_memos_access.generic" = "exVMs cannot read Voice Memos data. Add exVMs to Full Disk Access, then refresh.";
+"error.voice_memos_access.path %@" = "exVMs cannot read Voice Memos data at %@. Add exVMs to Full Disk Access, then refresh.";
+
+"token.title" = "Title";
+"token.id" = "ID";
+"token.year" = "Year";
+"token.month" = "Month";
+"token.day" = "Day";
+"token.hour" = "Hour";
+"token.minute" = "Minute";
+"token.second" = "Second";
+
+"accessibility.output.choose_directory" = "Choose output directory";
+"accessibility.recordings.select_all_visible" = "Select all exportable visible recordings";
+"accessibility.recordings.select_none_visible" = "Clear visible recording export selection";
+"accessibility.recording.export %@" = "Export %@";
+"accessibility.filename.example" = "Filename example";
+"accessibility.filename.pattern" = "Filename pattern";
+"accessibility.filename.pattern.help" = "Type literal filename text, or click a token above to insert it at the cursor.";
+"accessibility.filename.insert_token %@" = "Insert %@ token";
+"accessibility.filename.insert_token.hint" = "Adds this token to the filename pattern at the cursor.";
+"accessibility.filename.token %@" = "%@ token";
+"accessibility.filename.literal %@" = "text %@";
+
+"help.filename.insert_token %@" = "Insert %@";

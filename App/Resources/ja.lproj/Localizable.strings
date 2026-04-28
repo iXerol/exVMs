@@ -1,0 +1,71 @@
+"app.name" = "exVMs";
+"ui.toolbar.title" = "ボイスメモ";
+"ui.toolbar.recordings_path %@" = "録音フォルダ: %@";
+"ui.toolbar.no_storage" = "ストレージが読み込まれていません";
+"ui.toolbar.output_directory %@" = "書き出し先: %@";
+"ui.filename.section_title" = "書き出しファイル名";
+"ui.filename.example.label" = "例";
+"ui.filter.folder.label" = "フォルダ";
+"ui.full_disk_access.title" = "フルディスクアクセスが必要です";
+"ui.full_disk_access.message" = "exVMs がローカルのボイスメモデータベースを読み取るには権限が必要です。「システム設定」>「プライバシーとセキュリティ」>「フルディスクアクセス」に exVMs を追加してから更新してください。";
+"ui.full_disk_access.status_hint" = "exVMs にフルディスクアクセスを許可してから更新してください。";
+
+"action.show_in_finder" = "Finderで表示";
+"action.refresh" = "更新";
+"action.output" = "書き出し先";
+"action.export" = "書き出す";
+"action.select_all" = "すべて選択";
+"action.select_none" = "選択解除";
+"action.show_app_in_finder" = "FinderでexVMsを表示";
+"action.open_settings" = "設定を開く";
+"action.choose" = "選択";
+
+"filter.folder.all" = "すべてのフォルダ";
+"folder.none" = "フォルダなし";
+
+"table.column.export" = "書き出し";
+"table.column.title" = "タイトル";
+"table.column.folder" = "フォルダ";
+"table.column.recorded" = "録音日時";
+"table.column.duration" = "長さ";
+"table.column.availability" = "状態";
+"table.column.target" = "出力先";
+
+"status.items.count %lld" = "%lld件";
+"status.export_summary %lld %lld %lld" = "書き出し %lld、スキップ %lld、失敗 %lld";
+"status.choose_output_before_export" = "書き出す前に出力先フォルダを選択してください";
+
+"prompt.choose_output_directory" = "書き出し先フォルダを選択";
+
+"availability.local" = "ローカル";
+"availability.needs_download" = "ダウンロードが必要";
+"availability.outside_storage" = "ストレージ外";
+"availability.exported" = "書き出し済み";
+
+"error.recordings.list_failed" = "録音を一覧表示できませんでした";
+"error.export.failed" = "書き出しに失敗しました";
+"error.voice_memos_access.generic" = "exVMs はボイスメモデータを読み取れません。exVMs をフルディスクアクセスに追加してから更新してください。";
+"error.voice_memos_access.path %@" = "exVMs は %@ のボイスメモデータを読み取れません。exVMs をフルディスクアクセスに追加してから更新してください。";
+
+"token.title" = "タイトル";
+"token.id" = "ID";
+"token.year" = "年";
+"token.month" = "月";
+"token.day" = "日";
+"token.hour" = "時";
+"token.minute" = "分";
+"token.second" = "秒";
+
+"accessibility.output.choose_directory" = "書き出し先フォルダを選択";
+"accessibility.recordings.select_all_visible" = "表示中の書き出し可能な録音をすべて選択";
+"accessibility.recordings.select_none_visible" = "表示中の録音の書き出し選択を解除";
+"accessibility.recording.export %@" = "%@を書き出す";
+"accessibility.filename.example" = "ファイル名の例";
+"accessibility.filename.pattern" = "ファイル名パターン";
+"accessibility.filename.pattern.help" = "ファイル名の文字を直接入力するか、上のトークンをクリックしてカーソル位置に挿入します。";
+"accessibility.filename.insert_token %@" = "%@トークンを挿入";
+"accessibility.filename.insert_token.hint" = "このトークンをファイル名パターンのカーソル位置に追加します。";
+"accessibility.filename.token %@" = "%@トークン";
+"accessibility.filename.literal %@" = "テキスト %@";
+
+"help.filename.insert_token %@" = "%@を挿入";
