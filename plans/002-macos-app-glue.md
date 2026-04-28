@@ -6,7 +6,7 @@ Keep the existing Rust CLI/core split intact and add a narrow C ABI glue layer f
 
 ## Rust FFI
 
-- Build the crate as both `rlib` and `cdylib`.
+- Build the crate as both `rlib` and `staticlib`; link the Rust archive into the app executable instead of embedding a Rust dylib.
 - Keep Cargo features explicit: `default = []` for the library/FFI surface, and `cli` for CLI-only dependencies and the `exvms` binary.
 - Keep FFI code isolated in `src/ffi.rs`.
 - Keep `include/exvms.h` hand-written while the ABI is small, because it is a stable public contract and can carry Swift-facing nullability and `swift_name` annotations.
