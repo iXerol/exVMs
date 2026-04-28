@@ -1,162 +1,71 @@
 # exVMs
 
-`exVMs` is a Rust CLI for viewing and exporting recordings from Voice Memos.app on macOS.
+`exVMs` exports local recordings from Voice Memos.app on macOS.
 
-The tool reads the Voice Memos SQLite database from the active Recordings directory, lists recording metadata, and copies local audio files to a destination directory without overwriting existing files.
+It can be used as either:
 
-## Commands
+- a Rust CLI
+- a local unsandboxed macOS SwiftUI app
 
-Build or install the CLI first:
+The tool reads the active Voice Memos recordings store, lists metadata, and copies local audio files to an output directory without overwriting existing files.
 
-```sh
-cargo build --release --bin exvms
-```
+## CLI
 
-Use `exvms` when it is installed on `PATH`; if the binary is in the current directory, use `./exvms` instead.
-
-```sh
-exvms view
-```
-
-Prints:
-
-- active Voice Memos Recordings directory
-- selected database path
-- recording ID, title, recording time, duration, availability, store, path, folder, and database path
+Build the CLI:
 
 ```sh
-exvms export -o /path/to/export --id 304
-exvms export -o /path/to/export --id 304 --id 305
+cargo build --release --bin exvms --features cli
 ```
 
-Exports recordings by stable `Z_PK` ID from the `view` output. Explicit ID exports fail before copying anything if any requested ID does not exist, needs download, would overwrite a target, or would collide with another target.
+List recordings:
 
 ```sh
-exvms export -o /path/to/export -a
+target/release/exvms view
 ```
 
-Exports all local-exportable recordings, skips known `needs-download` recordings, and prints a final summary.
+Export selected recordings by the stable `Z_PK` ID shown by `view`:
 
 ```sh
-exvms export -o /path/to/export
+target/release/exvms export -o /path/to/export --id 304 --id 305
 ```
 
-Asks once for confirmation. Only exact `yes` proceeds.
+Export all local recordings:
 
 ```sh
-exvms export -o /path/to/export -a -p 4
+target/release/exvms export -o /path/to/export -a
 ```
 
-Controls export parallelism. The default is `min(4, available_parallelism)`.
+Use a filename template:
 
 ```sh
-exvms export -o /path/to/export -f "{id} {date:%Y-%m-%d} {title}"
-exvms export -o /path/to/export -f "{datetime:%Y-%m-%dT%H-%M-%S%.3f%z} {title}"
+target/release/exvms export -o /path/to/export -f "{datetime:%Y-%m-%d %H-%M-%S} {title}"
 ```
 
-Controls the exported stem with a filename template. The source file extension is preserved automatically.
+Supported template fields are `{id}`, `{title}`, `{date:FORMAT}`, `{time:FORMAT}`, and `{datetime:FORMAT}`. `FORMAT` uses `strftime` / `chrono` directives. The source file extension is appended automatically.
 
-## Data Model
+Recordings that are missing locally, still need download, or resolve outside the active Voice Memos recordings directory are not exported.
 
-The implementation supports these Voice Memos stores:
+If macOS denies terminal access to Voice Memos data, grant Full Disk Access to the terminal app you use to run `exvms`.
 
-- `CloudRecordings.db` with `ZCLOUDRECORDING`
-- `Recordings.db` with `ZRECORDING`
-- `ZFOLDER` when available for folder names
+## macOS App
 
-`ZDATE` is Apple/Core Data reference time. The tool converts it with:
+The app lists the current Voice Memos storage location and recordings in a table.
 
-```text
-unix_seconds = ZDATE + 978307200
-```
+Basic flow:
 
-`view` reports:
+1. Open the app.
+2. If prompted, add `exVMs` to System Settings > Privacy & Security > Full Disk Access, then refresh.
+3. Choose an output directory. The app remembers this directory for future launches if it still exists.
+4. Filter or sort recordings if needed.
+5. Enable the export checkbox for the recordings you want, or use Select All / Select None.
+6. Click Export.
 
-- `store`: `cloud-recordings` or `local-recordings`
-- `path`: `relative`, `absolute`, or `missing`
-- `availability`: `local`, `needs-download`, or `outside-recordings-dir`
+The Export button stays disabled until an output directory exists and at least one exportable, not-yet-exported recording is selected.
 
-Relative `ZPATH` values are resolved under the active Voice Memos Recordings directory. Absolute `ZPATH` values are only used when they can be safely mapped back into that selected Recordings directory, including mounted backup volumes such as `/Volumes/<name>/Users/<user>/...`.
+The filename editor is a single mixed text field. Type literal text directly, and click the title/date/time chips to insert them at the current cursor position. The example below the field previews the resulting filename.
 
-## Storage Discovery
+The app is localized in English, Simplified Chinese, Traditional Chinese, and Japanese.
 
-The tool tries these directories in order:
+## More
 
-```text
-~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings
-~/Library/Containers/Voice Memos/Data/Library/Application Support/Recordings
-~/Library/Application Support/com.apple.voicememos/Recordings
-```
-
-If macOS denies access to Voice Memos data, grant Full Disk Access to the terminal/app running `exvms`.
-
-## Cloud-Only Recordings
-
-Cloud-only or incomplete recordings are not exported. Missing files, 0-byte files, and rows with a missing database path are classified as `needs-download`.
-
-Voice Memos CloudKit placeholders do not expose a public standard iCloud Drive download path for this tool. `exvms` reports that the recording must be opened/downloaded in Voice Memos.app first. Paths that resolve outside the selected Recordings directory are reported as `outside-recordings-dir`.
-
-## Filename Templates
-
-`exvms export -f ...` supports these fields:
-
-- `{id}`
-- `{title}`
-- `{date:FORMAT}`
-- `{time:FORMAT}`
-- `{datetime:FORMAT}`
-
-`FORMAT` uses `strftime` / `chrono` directives. Useful ISO-8601-style examples:
-
-- `%Y-%m-%d`
-- `%H-%M-%S`
-- `%Y-%m-%dT%H-%M-%S%z`
-- `%Y-%m-%dT%H-%M-%S%.3f%z`
-
-Notes:
-
-- The default template is `{title}`
-- The source extension is appended automatically; do not add `.{extension}`
-- If the template does not contain `{id}` and multiple selected recordings render to the same filename, `exvms` automatically appends ` {id}` before the extension for those collisions
-- Template literals cannot contain `/` or `\`
-- Filename-unsafe characters from rendered output are sanitized, so `:` becomes `_`; prefer filesystem-safe separators like `-` in time strings
-
-## Architecture
-
-`src/main.rs` is the CLI layer. It parses arguments, performs user confirmation, and formats terminal output.
-
-The rest of `src/` is the Rust core library:
-
-- `db.rs`: probe and read Voice Memos SQLite databases and classify store/path metadata
-- `storage.rs`: discover the active Recordings directory and database
-- `export.rs`: plan, preflight, parallelize, and execute exports
-- `macos.rs`: macOS timestamp handling
-- `sanitize.rs`: sanitize target file and folder names
-- `time.rs`: Apple/Core Data time conversion and display formatting
-- `lib.rs`: public modules and error type
-
-## C API / Swift Status
-
-There is no C ABI exposed yet. A Swift/macOS app currently has two practical options:
-
-- shell out to the `exvms` binary and parse its output; or
-- add a future FFI target.
-
-A future FFI layer should add a `cdylib` crate type, `extern "C"` entry points, C-compatible result/recording structs, explicit allocation/free functions, and generated headers or Swift bindings. Do not expose Rust-owned structs, `String`, `Vec`, or `Result` directly over the C boundary.
-
-## Verification
-
-```sh
-cargo fmt -- --check
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo check
-```
-
-## GitHub Actions
-
-The workflow at `.github/workflows/build.yml` checks formatting, runs clippy and tests on `master` and pull requests targeting `master`. On git tag pushes, it builds the release CLI product with `cargo build --release --bin exvms` and uploads the compiled `exvms` binary as a workflow artifact.
-
-## Plans
-
-Project plans live under `plans/`. The current implementation plan is `plans/implementation.md`.
+Development, build, verification, and FFI details live in [docs/development.md](docs/development.md).

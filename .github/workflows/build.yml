@@ -1,4 +1,4 @@
-name: Build CLI
+name: Build
 
 on:
   push:
@@ -29,10 +29,22 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --lib --no-default-features -- -D warnings
+
+      - name: Run CLI clippy
+        run: cargo clippy --all-targets --features cli -- -D warnings
 
       - name: Run tests
-        run: cargo test
+        run: cargo test --features cli
+
+      - name: Install Tuist
+        run: brew install tuist
+
+      - name: Generate Xcode project
+        run: tuist generate --no-open
+
+      - name: Test macOS app
+        run: xcodebuild -workspace exVMs.xcworkspace -scheme exVMsApp -destination 'platform=macOS' -derivedDataPath /tmp/exvms-dd test
 
   build-tag-artifact:
     name: Build tagged exVMs artifact
@@ -47,7 +59,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build release CLI
-        run: cargo build --release --bin exvms
+        run: cargo build --release --bin exvms --features cli
 
       - name: Stage CLI artifact
         run: |
