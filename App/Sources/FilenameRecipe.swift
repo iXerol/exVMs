@@ -224,6 +224,8 @@ struct FilenameRecipe: Equatable, Codable {
             duration: 12,
             localDuration: 12,
             databasePath: FilePath("recording.m4a"),
+            sourcePath: nil,
+            pathKind: .relative,
             folderName: nil,
             availability: .local,
             availabilityDetail: nil

@@ -34,6 +34,7 @@ Keep the existing Rust CLI/core split intact and add a narrow C ABI glue layer f
 - Disable export until the user selects an output directory and selects at least one currently exportable, not-yet-exported row.
 - Swift monitors the selected output directory and marks rows as exported when the expected target file exists.
 - The recordings table should use an explicit export checkbox column instead of default row selection. Non-exportable rows must disable that checkbox.
+- Local recordings should expose a Quick Look preview action for the resolved source audio file. Missing, cloud-only, and outside-storage rows should disable preview.
 - Provide Select All and Select None actions for export checkboxes.
 - Show folder names in the table, provide a folder filter, and keep every data column except `Target` sortable.
 - Swift stores filename format as a structured recipe of token and literal parts.

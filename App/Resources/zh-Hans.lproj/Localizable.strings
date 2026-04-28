@@ -14,6 +14,7 @@
 "action.refresh" = "刷新";
 "action.output" = "导出目录";
 "action.export" = "导出";
+"action.preview" = "预览";
 "action.select_all" = "全选";
 "action.select_none" = "全不选";
 "action.show_app_in_finder" = "在访达中显示 exVMs";
@@ -24,6 +25,7 @@
 "folder.none" = "无文件夹";
 
 "table.column.export" = "导出";
+"table.column.preview" = "预览";
 "table.column.title" = "标题";
 "table.column.folder" = "文件夹";
 "table.column.recorded" = "录制时间";
@@ -60,6 +62,7 @@
 "accessibility.recordings.select_all_visible" = "选择当前可见且可导出的录音";
 "accessibility.recordings.select_none_visible" = "清除当前可见录音的导出选择";
 "accessibility.recording.export %@" = "导出 %@";
+"accessibility.recording.preview %@" = "预览 %@";
 "accessibility.filename.example" = "文件名示例";
 "accessibility.filename.pattern" = "文件名格式";
 "accessibility.filename.pattern.help" = "输入文件名文字，或点击上方控件将其插入到光标位置。";
@@ -69,3 +72,4 @@
 "accessibility.filename.literal %@" = "文字 %@";
 
 "help.filename.insert_token %@" = "插入%@";
+"help.recording.preview %@" = "使用快速查看预览 %@";

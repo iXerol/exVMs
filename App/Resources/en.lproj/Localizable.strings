@@ -14,6 +14,7 @@
 "action.refresh" = "Refresh";
 "action.output" = "Output";
 "action.export" = "Export";
+"action.preview" = "Preview";
 "action.select_all" = "Select All";
 "action.select_none" = "Select None";
 "action.show_app_in_finder" = "Show exVMs in Finder";
@@ -24,6 +25,7 @@
 "folder.none" = "No Folder";
 
 "table.column.export" = "Export";
+"table.column.preview" = "Preview";
 "table.column.title" = "Title";
 "table.column.folder" = "Folder";
 "table.column.recorded" = "Recorded";
@@ -60,6 +62,7 @@
 "accessibility.recordings.select_all_visible" = "Select all exportable visible recordings";
 "accessibility.recordings.select_none_visible" = "Clear visible recording export selection";
 "accessibility.recording.export %@" = "Export %@";
+"accessibility.recording.preview %@" = "Preview %@";
 "accessibility.filename.example" = "Filename example";
 "accessibility.filename.pattern" = "Filename pattern";
 "accessibility.filename.pattern.help" = "Type literal filename text, or click a token above to insert it at the cursor.";
@@ -69,3 +72,4 @@
 "accessibility.filename.literal %@" = "text %@";
 
 "help.filename.insert_token %@" = "Insert %@";
+"help.recording.preview %@" = "Preview %@ with Quick Look";
