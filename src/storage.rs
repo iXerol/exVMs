@@ -1,3 +1,5 @@
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::{ExvmsError, Result, db};
@@ -20,14 +22,14 @@ pub fn discover_from_home(home: PathBuf) -> Result<VoiceMemosStore> {
     let mut first_probe_error = None;
 
     for dir in candidate_recording_dirs(&home) {
-        if !dir.is_dir() {
+        if !is_accessible_dir(&dir)? {
             continue;
         }
 
         first_existing_recordings_dir.get_or_insert_with(|| dir.clone());
 
         for db_path in candidate_database_paths(&dir) {
-            if !db_path.is_file() {
+            if !is_accessible_file(&db_path)? {
                 continue;
             }
 
@@ -89,6 +91,33 @@ pub fn candidate_database_paths(recordings_dir: &Path) -> Vec<PathBuf> {
         recordings_dir.join("CloudRecordings.db"),
         recordings_dir.join("Recordings.db"),
     ]
+}
+
+fn is_accessible_dir(path: &Path) -> Result<bool> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata.is_dir()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(err) if is_permission_error(&err) => {
+            Err(ExvmsError::StorageAccessDenied(path.to_path_buf()))
+        }
+        Err(err) => Err(err.into()),
+    }
+}
+
+fn is_accessible_file(path: &Path) -> Result<bool> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata.is_file()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(err) if is_permission_error(&err) => {
+            Err(ExvmsError::StorageAccessDenied(path.to_path_buf()))
+        }
+        Err(err) => Err(err.into()),
+    }
+}
+
+fn is_permission_error(err: &io::Error) -> bool {
+    err.kind() == io::ErrorKind::PermissionDenied
+        || matches!(err.raw_os_error(), Some(libc::EACCES | libc::EPERM))
 }
 
 #[cfg(test)]
