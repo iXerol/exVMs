@@ -134,3 +134,7 @@ cargo build --release --bin exvms --features cli
 ```
 
 The compiled `exvms` binary is uploaded as a workflow artifact.
+
+## License
+
+The project is licensed as `AGPL-3.0-or-later`. This is a strong copyleft license; distributed modified versions and network-service deployments must provide corresponding source under the same license terms.
