@@ -3,16 +3,24 @@ name = "exvms"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "exvms"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+cli = ["dep:clap", "dep:unicode-width"]
+
 [dependencies]
 chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.0", features = ["derive"], optional = true }
 dirs = "6.0.0"
 filetime = "0.2.27"
 libc = "0.2.182"
 rayon = "1.11.0"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 thiserror = "2.0.18"
-unicode-width = "0.2.2"
+unicode-width = { version = "0.2.2", optional = true }
 
 [dev-dependencies]
 tempfile = "3.24.0"
@@ -20,3 +28,4 @@ tempfile = "3.24.0"
 [[bin]]
 name = "exvms"
 path = "src/main.rs"
+required-features = ["cli"]

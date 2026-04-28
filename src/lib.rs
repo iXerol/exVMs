@@ -1,5 +1,6 @@
 pub mod db;
 pub mod export;
+pub mod ffi;
 pub mod macos;
 pub mod sanitize;
 pub mod storage;
@@ -18,6 +19,8 @@ pub enum ExvmsError {
     StorageNotFound,
     #[error("Voice Memos database was not found in {0}")]
     DatabaseNotFound(PathBuf),
+    #[error("permission denied reading Voice Memos data at {0}")]
+    StorageAccessDenied(PathBuf),
     #[error("missing required column(s) in {table}: {columns:?}")]
     MissingColumns {
         table: &'static str,
