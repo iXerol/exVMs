@@ -4,12 +4,6 @@ let rustBuildScript = """
 /bin/sh "$SRCROOT/scripts/xcode-build-rust-library.sh"
 """
 
-let rustEmbedScript = """
-set -euo pipefail
-mkdir -p "$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
-cp "$SRCROOT/target/xcode/libexvms.dylib" "$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/libexvms.dylib"
-"""
-
 let displayName = "exVMs"
 let version = "1.0.0"
 let bundleVersion = "260428"
@@ -43,7 +37,6 @@ let project = Project(
             resources: ["App/Resources/**"],
             scripts: [
                 .pre(script: rustBuildScript, name: "Build Rust Library", basedOnDependencyAnalysis: false),
-                .post(script: rustEmbedScript, name: "Embed Rust Library", basedOnDependencyAnalysis: false),
             ],
             dependencies: [],
             settings: .settings(
@@ -57,7 +50,7 @@ let project = Project(
                 "ENABLE_APP_SANDBOX": "NO",
                 "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/../Frameworks",
                 "LIBRARY_SEARCH_PATHS": "$(inherited) $(SRCROOT)/target/xcode",
-                "OTHER_LDFLAGS": "$(inherited) -lexvms",
+                "OTHER_LDFLAGS": "$(inherited) $(SRCROOT)/target/xcode/libexvms.a",
                 "SWIFT_OBJC_BRIDGING_HEADER": "$(SRCROOT)/App/Support/ExVMs-Bridging-Header.h",
                 ],
                 configurations: [

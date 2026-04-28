@@ -46,7 +46,7 @@ Cloud-only or incomplete recordings are classified as `needs-download`. Paths th
 
 ## Rust Library And FFI
 
-The Rust crate builds both an `rlib` and a `cdylib`. The default feature set is intentionally empty, so a library build does not include CLI-only dependencies such as `clap` and `unicode-width`. The CLI binary is behind the `cli` feature.
+The Rust crate builds both an `rlib` and a `staticlib`. The default feature set is intentionally empty, so a library build does not include CLI-only dependencies such as `clap` and `unicode-width`. The CLI binary is behind the `cli` feature.
 
 The C ABI is declared in `include/exvms.h`. The header is hand-written so the project can keep a small stable ABI and add Swift-facing nullability and naming annotations without requiring cbindgen in every app build.
 
@@ -61,7 +61,7 @@ The C boundary intentionally does not expose Rust-owned `String`, `Vec`, `PathBu
 
 ## macOS App Build
 
-The macOS app is generated with Tuist and implemented in SwiftUI. It links the Rust `cdylib` through `include/exvms.h`, targets macOS 14+, and compiles in Swift 6 mode with strict concurrency enabled.
+The macOS app is generated with Tuist and implemented in SwiftUI. It links the Rust static library through `include/exvms.h`, targets macOS 14+, and compiles in Swift 6 mode with strict concurrency enabled.
 
 ```sh
 tuist generate --no-open
@@ -76,7 +76,7 @@ cargo build --release --lib --no-default-features --target x86_64-apple-darwin
 xcrun lipo -create ...
 ```
 
-The script writes `target/xcode/libexvms.dylib` and embeds that library into the app bundle. It resolves Cargo through `CARGO`, Xcode's `PATH`, or the user's login shell; it does not assume a rustup or Homebrew install path. If `rustup` is available, the script installs missing Rust targets automatically. Otherwise, install archive targets manually:
+The script writes `target/xcode/libexvms.a`, which Xcode links into the app executable. There is no Rust dylib embedded in the app bundle, so archive signing does not need a separate Rust library signing step. The script resolves Cargo through `CARGO`, Xcode's `PATH`, or the user's login shell; it does not assume a rustup or Homebrew install path. If `rustup` is available, the script installs missing Rust targets automatically. Otherwise, install archive targets manually:
 
 ```sh
 rustup target add aarch64-apple-darwin x86_64-apple-darwin

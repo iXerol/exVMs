@@ -4,9 +4,9 @@ set -eu
 cd "$SRCROOT"
 
 artifact_dir="$SRCROOT/target/xcode"
-artifact="$artifact_dir/libexvms.dylib"
+artifact="$artifact_dir/libexvms.a"
 mkdir -p "$artifact_dir"
-rm -f "$artifact"
+rm -f "$artifact" "$artifact_dir/libexvms.dylib"
 
 run_cargo() {
   if [ -n "${CARGO:-}" ]; then
@@ -76,7 +76,7 @@ libs=""
 for target in $targets; do
   ensure_rust_target "$target"
   run_cargo build --release --lib --no-default-features --target "$target"
-  lib="$SRCROOT/target/$target/release/libexvms.dylib"
+  lib="$SRCROOT/target/$target/release/libexvms.a"
   if [ ! -f "$lib" ]; then
     echo "error: expected Rust library was not produced at $lib" >&2
     exit 1
