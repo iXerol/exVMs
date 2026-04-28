@@ -150,6 +150,39 @@ struct RecordingsViewModelTests {
         #expect(viewModel.fullDiskAccessMessage != nil)
     }
 
+    @Test
+    func localSourceFileEnablesPreview() throws {
+        let tmp = try temporaryDirectory()
+        let source = tmp.appendingPathComponent("Local.m4a")
+        FileManager.default.createFile(atPath: source.path, contents: Data([1]))
+        let client = MockExvmsClient(
+            store: VoiceMemosStore(
+                recordingsDirectory: FilePath(tmp.path),
+                databasePath: FilePath(tmp.appendingPathComponent("CloudRecordings.db").path)
+            ),
+            recordings: [
+                .fixture(
+                    id: 1,
+                    title: "Local",
+                    availability: .local,
+                    sourcePath: FilePath(source.path)
+                ),
+                .fixture(
+                    id: 2,
+                    title: "Cloud",
+                    availability: .needsDownload,
+                    sourcePath: FilePath(source.path)
+                ),
+            ]
+        )
+        let viewModel = RecordingsViewModel(client: client)
+
+        viewModel.refresh()
+
+        #expect(viewModel.rows[0].canPreview)
+        #expect(!viewModel.rows[1].canPreview)
+    }
+
     private func temporaryDirectory() throws -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -167,10 +200,19 @@ struct RecordingsViewModelTests {
 
 private final class MockExvmsClient: ExvmsClient {
     var exportedIDs: [Int64] = []
+    private var store: VoiceMemosStore
     private var recordings: [VoiceMemoRecording]
     private var listError: Error?
 
-    init(recordings: [VoiceMemoRecording], listError: Error? = nil) {
+    init(
+        store: VoiceMemosStore = VoiceMemosStore(
+            recordingsDirectory: FilePath("/tmp/Recordings"),
+            databasePath: FilePath("/tmp/Recordings/CloudRecordings.db")
+        ),
+        recordings: [VoiceMemoRecording],
+        listError: Error? = nil
+    ) {
+        self.store = store
         self.recordings = recordings
         self.listError = listError
     }
@@ -180,7 +222,7 @@ private final class MockExvmsClient: ExvmsClient {
             throw listError
         }
         return RecordingCatalog(
-            store: VoiceMemosStore(recordingsDirectory: FilePath("/tmp/Recordings"), databasePath: FilePath("/tmp/Recordings/CloudRecordings.db")),
+            store: store,
             recordings: recordings
         )
     }
@@ -196,7 +238,8 @@ private extension VoiceMemoRecording {
         id: Int64,
         title: String,
         availability: RecordingAvailability,
-        folderName: String? = nil
+        folderName: String? = nil,
+        sourcePath: FilePath? = nil
     ) -> VoiceMemoRecording {
         VoiceMemoRecording(
             id: id,
@@ -205,6 +248,8 @@ private extension VoiceMemoRecording {
             duration: 2,
             localDuration: availability.isExportable ? 2 : 0,
             databasePath: FilePath("\(title).m4a"),
+            sourcePath: sourcePath,
+            pathKind: .relative,
             folderName: folderName,
             availability: availability,
             availabilityDetail: nil

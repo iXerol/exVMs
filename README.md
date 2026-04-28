@@ -57,8 +57,9 @@ Basic flow:
 2. If prompted, add `exVMs` to System Settings > Privacy & Security > Full Disk Access, then refresh.
 3. Choose an output directory. The app remembers this directory for future launches if it still exists.
 4. Filter or sort recordings if needed.
-5. Enable the export checkbox for the recordings you want, or use Select All / Select None.
-6. Click Export.
+5. Preview local recordings with Quick Look if needed.
+6. Enable the export checkbox for the recordings you want, or use Select All / Select None.
+7. Click Export.
 
 The Export button stays disabled until an output directory exists and at least one exportable, not-yet-exported recording is selected.
 

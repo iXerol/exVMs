@@ -51,6 +51,25 @@ enum RecordingAvailability: Int32 {
     }
 }
 
+enum RecordingPathKind: Int32 {
+    case relative = 0
+    case absolute = 1
+    case missing = 2
+
+    init(exvmsPathKind: ExvmsPathKind) {
+        switch exvmsPathKind {
+        case .relative:
+            self = .relative
+        case .absolute:
+            self = .absolute
+        case .missing:
+            self = .missing
+        default:
+            self = .missing
+        }
+    }
+}
+
 struct VoiceMemoRecording: Identifiable, Hashable {
     var id: Int64
     var title: String
@@ -58,6 +77,8 @@ struct VoiceMemoRecording: Identifiable, Hashable {
     var duration: TimeInterval
     var localDuration: TimeInterval
     var databasePath: FilePath
+    var sourcePath: FilePath?
+    var pathKind: RecordingPathKind
     var folderName: String?
     var availability: RecordingAvailability
     var availabilityDetail: String?
@@ -93,13 +114,21 @@ final class RustExvmsClient: ExvmsClient {
             databasePath: Self.filePath(from: result.db_path) ?? FilePath("")
         )
         let rows = Self.buffer(result.recordings, count: Int(result.recordings_len)).map { row in
-            VoiceMemoRecording(
+            let databasePath = Self.filePath(from: row.db_path) ?? FilePath("")
+            let pathKind = RecordingPathKind(exvmsPathKind: row.path_kind)
+            return VoiceMemoRecording(
                 id: row.id,
                 title: Self.string(from: row.title) ?? "",
                 recordedAt: row.recorded_at,
                 duration: row.duration,
                 localDuration: row.local_duration,
-                databasePath: Self.filePath(from: row.db_path) ?? FilePath(""),
+                databasePath: databasePath,
+                sourcePath: Self.sourcePath(
+                    recordingsDirectory: store.recordingsDirectory,
+                    databasePath: databasePath,
+                    pathKind: pathKind
+                ),
+                pathKind: pathKind,
                 folderName: Self.nonEmptyString(from: row.folder_name),
                 availability: RecordingAvailability(exvmsAvailability: row.availability),
                 availabilityDetail: Self.nonEmptyString(from: row.availability_detail)
@@ -163,5 +192,89 @@ final class RustExvmsClient: ExvmsClient {
             return nil
         }
         return value
+    }
+
+    private static func sourcePath(
+        recordingsDirectory: FilePath,
+        databasePath: FilePath,
+        pathKind: RecordingPathKind
+    ) -> FilePath? {
+        switch pathKind {
+        case .relative:
+            return FilePath(
+                recordingsDirectory
+                    .fileURL(isDirectory: true)
+                    .appendingPathComponent(databasePath.string)
+                    .path
+            )
+        case .absolute:
+            return resolvedAbsoluteSource(
+                recordingsDirectory: recordingsDirectory,
+                databasePath: databasePath
+            )
+        case .missing:
+            return nil
+        }
+    }
+
+    private static func resolvedAbsoluteSource(
+        recordingsDirectory: FilePath,
+        databasePath: FilePath
+    ) -> FilePath? {
+        let recordingsURL = recordingsDirectory.fileURL(isDirectory: true).standardizedFileURL
+        let originalURL = databasePath.fileURL().standardizedFileURL
+
+        if originalURL.path.hasPrefix(recordingsURL.path + "/") || originalURL.path == recordingsURL.path {
+            return FilePath(originalURL.path)
+        }
+
+        if let remapped = remappedLegacyAbsoluteSource(
+            recordingsDirectoryURL: recordingsURL,
+            originalURL: originalURL
+        ) {
+            return FilePath(remapped.path)
+        }
+
+        let candidate = recordingsURL.appendingPathComponent(originalURL.lastPathComponent)
+        if FileManager.default.fileExists(atPath: candidate.path) {
+            return FilePath(candidate.path)
+        }
+
+        return FilePath(originalURL.path)
+    }
+
+    private static func remappedLegacyAbsoluteSource(
+        recordingsDirectoryURL: URL,
+        originalURL: URL
+    ) -> URL? {
+        let components = originalURL.pathComponents.filter { $0 != "/" }
+        for suffix in knownRecordingsSuffixes {
+            guard let index = components.firstSubsequenceIndex(of: suffix) else {
+                continue
+            }
+            let tail = Array(components.dropFirst(index + suffix.count))
+            guard !tail.isEmpty, !tail.contains("..") else {
+                continue
+            }
+            return recordingsDirectoryURL.appendingPathComponent(tail.joined(separator: "/"))
+        }
+        return nil
+    }
+
+    private static let knownRecordingsSuffixes = [
+        ["Library", "Group Containers", "group.com.apple.VoiceMemos.shared", "Recordings"],
+        ["Library", "Containers", "Voice Memos", "Data", "Library", "Application Support", "Recordings"],
+        ["Library", "Application Support", "com.apple.voicememos", "Recordings"],
+    ]
+}
+
+private extension Array where Element: Equatable {
+    func firstSubsequenceIndex(of subsequence: [Element]) -> Int? {
+        guard !subsequence.isEmpty, count >= subsequence.count else {
+            return nil
+        }
+        return indices.dropLast(subsequence.count - 1).first { index in
+            Array(self[index..<index + subsequence.count]) == subsequence
+        }
     }
 }

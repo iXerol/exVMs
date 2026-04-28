@@ -39,6 +39,8 @@ struct FilenameRecipeTests {
             duration: 2,
             localDuration: 2,
             databasePath: FilePath("folder/source.m4a"),
+            sourcePath: nil,
+            pathKind: .relative,
             folderName: "Notes:Drafts",
             availability: .local,
             availabilityDetail: nil
@@ -59,6 +61,8 @@ struct FilenameRecipeTests {
             duration: 2,
             localDuration: 0,
             databasePath: FilePath("cloud.m4a"),
+            sourcePath: nil,
+            pathKind: .relative,
             folderName: nil,
             availability: .needsDownload,
             availabilityDetail: nil

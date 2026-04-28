@@ -14,6 +14,7 @@
 "action.refresh" = "重新整理";
 "action.output" = "匯出目錄";
 "action.export" = "匯出";
+"action.preview" = "預覽";
 "action.select_all" = "全選";
 "action.select_none" = "全不選";
 "action.show_app_in_finder" = "在 Finder 中顯示 exVMs";
@@ -24,6 +25,7 @@
 "folder.none" = "無資料夾";
 
 "table.column.export" = "匯出";
+"table.column.preview" = "預覽";
 "table.column.title" = "標題";
 "table.column.folder" = "資料夾";
 "table.column.recorded" = "錄製時間";
@@ -60,6 +62,7 @@
 "accessibility.recordings.select_all_visible" = "選取目前可見且可匯出的錄音";
 "accessibility.recordings.select_none_visible" = "清除目前可見錄音的匯出選取";
 "accessibility.recording.export %@" = "匯出 %@";
+"accessibility.recording.preview %@" = "預覽 %@";
 "accessibility.filename.example" = "檔名範例";
 "accessibility.filename.pattern" = "檔名格式";
 "accessibility.filename.pattern.help" = "輸入檔名文字，或點選上方控制項將其插入游標位置。";
@@ -69,3 +72,4 @@
 "accessibility.filename.literal %@" = "文字 %@";
 
 "help.filename.insert_token %@" = "插入%@";
+"help.recording.preview %@" = "使用快速查看預覽 %@";

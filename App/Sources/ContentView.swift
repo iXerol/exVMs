@@ -135,6 +135,19 @@ struct ContentView: View {
                     .accessibilityLabel("accessibility.recording.export \(row.title)")
             }
             .width(54)
+            TableColumn("table.column.preview") { row in
+                Button {
+                    viewModel.preview(row: row)
+                } label: {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .accessibilityHidden(true)
+                }
+                .buttonStyle(.borderless)
+                .disabled(!row.canPreview)
+                .help(Text("help.recording.preview \(row.title)"))
+                .accessibilityLabel("accessibility.recording.preview \(row.title)")
+            }
+            .width(64)
             TableColumn("table.column.title", value: \.title) { row in
                 Text(row.title)
                     .lineLimit(1)

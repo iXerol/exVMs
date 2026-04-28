@@ -9,6 +9,13 @@ struct RecordingRow: Identifiable, Hashable {
 
     var id: Int64 { recording.id }
     var canExport: Bool { recording.availability.isExportable && !exported }
+    var canPreview: Bool {
+        guard recording.availability == .local,
+              let sourcePath = recording.sourcePath else {
+            return false
+        }
+        return FileManager.default.fileExists(atPath: sourcePath.string)
+    }
     var title: String { recording.title }
     var folderDisplayName: String { recording.folderName?.nilIfEmpty ?? String(localized: "folder.none") }
     var recordedDate: Date { recording.recordingDate }
@@ -57,6 +64,8 @@ final class RecordingsViewModel {
     private let userDefaults: UserDefaults
     @ObservationIgnored
     private let outputMonitor = DirectoryMonitor()
+    @ObservationIgnored
+    private let quickLookPreviewController = QuickLookPreviewController()
     @ObservationIgnored
     private var recordings: [VoiceMemoRecording] = []
 
@@ -166,6 +175,14 @@ final class RecordingsViewModel {
         } else {
             selectedIDs.remove(row.id)
         }
+    }
+
+    func preview(row: RecordingRow) {
+        guard row.canPreview,
+              let sourcePath = row.recording.sourcePath else {
+            return
+        }
+        quickLookPreviewController.preview(url: sourcePath.fileURL())
     }
 
     func exportSelection() {

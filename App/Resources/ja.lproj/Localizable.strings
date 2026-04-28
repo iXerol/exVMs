@@ -14,6 +14,7 @@
 "action.refresh" = "更新";
 "action.output" = "書き出し先";
 "action.export" = "書き出す";
+"action.preview" = "プレビュー";
 "action.select_all" = "すべて選択";
 "action.select_none" = "選択解除";
 "action.show_app_in_finder" = "FinderでexVMsを表示";
@@ -24,6 +25,7 @@
 "folder.none" = "フォルダなし";
 
 "table.column.export" = "書き出し";
+"table.column.preview" = "プレビュー";
 "table.column.title" = "タイトル";
 "table.column.folder" = "フォルダ";
 "table.column.recorded" = "録音日時";
@@ -60,6 +62,7 @@
 "accessibility.recordings.select_all_visible" = "表示中の書き出し可能な録音をすべて選択";
 "accessibility.recordings.select_none_visible" = "表示中の録音の書き出し選択を解除";
 "accessibility.recording.export %@" = "%@を書き出す";
+"accessibility.recording.preview %@" = "%@をプレビュー";
 "accessibility.filename.example" = "ファイル名の例";
 "accessibility.filename.pattern" = "ファイル名パターン";
 "accessibility.filename.pattern.help" = "ファイル名の文字を直接入力するか、上のトークンをクリックしてカーソル位置に挿入します。";
@@ -69,3 +72,4 @@
 "accessibility.filename.literal %@" = "テキスト %@";
 
 "help.filename.insert_token %@" = "%@を挿入";
+"help.recording.preview %@" = "クイックルックで%@をプレビュー";
