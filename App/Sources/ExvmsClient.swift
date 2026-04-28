@@ -25,11 +25,11 @@ enum RecordingAvailability: Int32 {
     var label: String {
         switch self {
         case .local:
-            String(localized: "availability.local")
+            ExVMsAppStrings.Availability.local
         case .needsDownload:
-            String(localized: "availability.needs_download")
+            ExVMsAppStrings.Availability.needsDownload
         case .outsideRecordingsDirectory:
-            String(localized: "availability.outside_storage")
+            ExVMsAppStrings.Availability.outsideStorage
         }
     }
 
@@ -106,7 +106,7 @@ final class RustExvmsClient: ExvmsClient {
         defer { exvmsFreeListResult(result) }
 
         guard result.code == .OK else {
-            throw ExvmsClientError.rust(Self.string(from: result.message) ?? String(localized: "error.recordings.list_failed"))
+            throw ExvmsClientError.rust(Self.string(from: result.message) ?? ExVMsAppStrings.Error.Recordings.listFailed)
         }
 
         let store = VoiceMemosStore(
@@ -154,7 +154,7 @@ final class RustExvmsClient: ExvmsClient {
                 defer { exvmsFreeExportResult(result) }
 
                 guard result.code == .OK else {
-                    throw ExvmsClientError.rust(Self.string(from: result.message) ?? String(localized: "error.export.failed"))
+                    throw ExvmsClientError.rust(Self.string(from: result.message) ?? ExVMsAppStrings.Error.Export.failed)
                 }
 
                 return ExportSummary(

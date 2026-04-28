@@ -88,7 +88,7 @@ The app stores local file paths as `System.FilePath`, including paths converted 
 
 The selected output directory is stored in `UserDefaults`. If the saved path is empty or no longer exists, launch behaves the same as no directory being selected.
 
-Localized app strings live under `App/Resources/*.lproj/Localizable.strings`. The supported app localizations are English, Simplified Chinese, Traditional Chinese, and Japanese. Use semantic keys that describe purpose and part of speech, such as `action.refresh`, `table.column.export`, and `status.items.count`; do not use English UI copy as keys. SwiftUI views should use native `LocalizedStringKey` literals, while AppKit and view-model boundaries that require a concrete `String` should use `String(localized:)`.
+Localized app strings live under `App/Resources/*.lproj/Localizable.strings`. The supported app localizations are English, Simplified Chinese, Traditional Chinese, and Japanese. Use semantic keys that describe purpose and part of speech, such as `action.refresh`, `table.column.export`, and `status.items.count`; do not use English UI copy as keys. SwiftUI views should use native `LocalizedStringKey` literals, while AppKit and view-model boundaries that require a concrete `String` should use Tuist's generated `ExVMsAppStrings` API instead of hard-coded localization keys.
 
 App tests use Swift Testing, not XCTest.
 
