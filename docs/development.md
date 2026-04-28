@@ -68,13 +68,19 @@ tuist generate --no-open
 xcodebuild -workspace exVMs.xcworkspace -scheme exVMsApp -destination 'platform=macOS' -derivedDataPath /tmp/exvms-dd build
 ```
 
-The Xcode target runs this in a pre-build script:
+The Xcode target runs `scripts/xcode-build-rust-library.sh` in a pre-build script. Normal builds follow Xcode's `ARCHS`; archive builds force `arm64 x86_64`, build both Rust targets, and combine them with `lipo`:
 
 ```sh
-cargo build --release --lib --no-default-features
+cargo build --release --lib --no-default-features --target aarch64-apple-darwin
+cargo build --release --lib --no-default-features --target x86_64-apple-darwin
+xcrun lipo -create ...
 ```
 
-It embeds `target/release/libexvms.dylib` into the app bundle. The script resolves Cargo through `CARGO`, Xcode's `PATH`, or the user's login shell; it does not assume a rustup or Homebrew install path.
+The script writes `target/xcode/libexvms.dylib` and embeds that library into the app bundle. It resolves Cargo through `CARGO`, Xcode's `PATH`, or the user's login shell; it does not assume a rustup or Homebrew install path. If `rustup` is available, the script installs missing Rust targets automatically. Otherwise, install archive targets manually:
+
+```sh
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+```
 
 The app is intended to run unsandboxed. Rust reports neutral storage permission errors; the Swift app checks Voice Memos access on launch and shows a Full Disk Access panel when macOS blocks the database.
 

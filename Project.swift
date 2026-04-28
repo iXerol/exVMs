@@ -1,25 +1,13 @@
 import ProjectDescription
 
 let rustBuildScript = """
-set -euo pipefail
-cd "$SRCROOT"
-
-if [ -n "${CARGO:-}" ]; then
-  "$CARGO" build --release --lib --no-default-features
-elif command -v cargo >/dev/null 2>&1; then
-  cargo build --release --lib --no-default-features
-elif [ -n "${SHELL:-}" ]; then
-  "$SHELL" -lc 'cd "$SRCROOT" && cargo build --release --lib --no-default-features'
-else
-  echo "error: cargo was not found. Set CARGO or make cargo available through Xcode's PATH/login shell." >&2
-  exit 127
-fi
+/bin/sh "$SRCROOT/scripts/xcode-build-rust-library.sh"
 """
 
 let rustEmbedScript = """
 set -euo pipefail
 mkdir -p "$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
-cp "$SRCROOT/target/release/libexvms.dylib" "$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/libexvms.dylib"
+cp "$SRCROOT/target/xcode/libexvms.dylib" "$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/libexvms.dylib"
 """
 
 let project = Project(
@@ -55,7 +43,7 @@ let project = Project(
                 "CODE_SIGN_ENTITLEMENTS": "",
                 "ENABLE_APP_SANDBOX": "NO",
                 "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/../Frameworks",
-                "LIBRARY_SEARCH_PATHS": "$(inherited) $(SRCROOT)/target/release",
+                "LIBRARY_SEARCH_PATHS": "$(inherited) $(SRCROOT)/target/xcode",
                 "OTHER_LDFLAGS": "$(inherited) -lexvms",
                 "SWIFT_OBJC_BRIDGING_HEADER": "$(SRCROOT)/App/Support/ExVMs-Bridging-Header.h",
             ])
