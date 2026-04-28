@@ -69,3 +69,5 @@ The app is localized in English, Simplified Chinese, Traditional Chinese, and Ja
 ## More
 
 Development, build, verification, and FFI details live in [docs/development.md](docs/development.md).
+
+Historical planning snapshots live in [plans/](plans/). They are kept as a record of decisions at the time and are not rewritten when later implementation choices change.
