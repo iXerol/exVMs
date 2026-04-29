@@ -44,7 +44,7 @@ jobs:
         run: tuist generate --no-open
 
       - name: Test macOS app
-        run: xcodebuild -workspace exVMs.xcworkspace -scheme exVMsApp -destination 'platform=macOS' -derivedDataPath /tmp/exvms-dd test
+        run: xcodebuild -workspace exVMs.xcworkspace -scheme exVMsApp -destination 'platform=macOS' -derivedDataPath /tmp/exvms-dd CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test
 
   build-tag-artifact:
     name: Build tagged exVMs artifact
