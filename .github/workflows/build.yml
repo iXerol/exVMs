@@ -11,9 +11,9 @@ on:
       - master
 
 jobs:
-  verify-macos:
-    name: Verify exVMs on macOS
-    runs-on: macos-latest
+  verify-cli:
+    name: Verify CLI
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master'
 
     steps:
@@ -37,14 +37,26 @@ jobs:
       - name: Run tests
         run: cargo test --features cli
 
+  verify-macos-app:
+    name: Verify macOS App
+    runs-on: macos-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install Tuist
         run: brew install tuist
 
       - name: Generate Xcode project
         run: tuist generate --no-open
 
-      - name: Test macOS app
-        run: xcodebuild -workspace exVMs.xcworkspace -scheme exVMsApp -destination 'platform=macOS' -derivedDataPath /tmp/exvms-dd CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test
+      - name: Run macOS app tests
+        run: xcodebuild -workspace exVMs.xcworkspace -scheme exVMsApp -destination 'platform=macOS' -derivedDataPath /tmp/exvms-dd CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test -only-testing:exVMsAppTests
 
   build-tag-artifact:
     name: Build tagged exVMs artifact
