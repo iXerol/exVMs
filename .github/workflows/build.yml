@@ -10,6 +10,9 @@ on:
     branches:
       - master
 
+permissions:
+  contents: read
+
 jobs:
   verify-cli:
     name: Verify CLI
@@ -18,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -44,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -62,26 +65,54 @@ jobs:
     name: Build tagged exVMs artifact
     runs-on: macos-latest
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
 
-      - name: Build release CLI
-        run: cargo build --release --bin exvms --features cli
+      - name: Build release CLI (arm64)
+        run: cargo build --release --bin exvms --features cli --target aarch64-apple-darwin
+
+      - name: Build release CLI (x86_64)
+        run: cargo build --release --bin exvms --features cli --target x86_64-apple-darwin
 
       - name: Stage CLI artifact
         run: |
           mkdir -p dist
-          cp target/release/exvms dist/exvms
-          chmod +x dist/exvms
+          cp target/aarch64-apple-darwin/release/exvms dist/exvms-macos-arm64
+          cp target/x86_64-apple-darwin/release/exvms dist/exvms-macos-x86_64
+          lipo -create \
+            -output dist/exvms-macos-universal \
+            dist/exvms-macos-arm64 \
+            dist/exvms-macos-x86_64
+          chmod +x dist/exvms-macos-arm64 dist/exvms-macos-x86_64 dist/exvms-macos-universal
 
       - name: Upload CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: exvms-macos-${{ runner.arch }}
-          path: dist/exvms
+          name: exvms-macos-binaries
+          path: |
+            dist/exvms-macos-arm64
+            dist/exvms-macos-x86_64
+            dist/exvms-macos-universal
           if-no-files-found: error
+
+      - name: Publish GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes ""
+          fi
+          gh release upload "${GITHUB_REF_NAME}" \
+            dist/exvms-macos-arm64 \
+            dist/exvms-macos-x86_64 \
+            dist/exvms-macos-universal \
+            --clobber
