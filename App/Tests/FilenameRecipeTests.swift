@@ -1,7 +1,7 @@
 import Foundation
 import System
 import Testing
-@testable import exVMsApp
+@testable import exVMs
 
 struct FilenameRecipeTests {
     @Test

@@ -27,7 +27,7 @@ Keep the existing Rust CLI/core split intact and add a narrow C ABI glue layer f
 - Keep app resources because the app now ships localized `Localizable.strings` files.
 - Support English, Simplified Chinese, Traditional Chinese, and Japanese localizations.
 - Use semantic localization keys by purpose and part of speech, such as `action.refresh`, `table.column.export`, and `status.items.count`. Do not use English UI copy as localization keys.
-- SwiftUI views should rely on native `LocalizedStringKey` literals. Where an API requires a concrete `String`, such as AppKit accessibility labels, `NSOpenPanel`, or view-model status text, use Tuist's generated `ExVMsAppStrings` API instead of hard-coded localization keys.
+- SwiftUI views should rely on native `LocalizedStringKey` literals. Where an API requires a concrete `String`, such as AppKit accessibility labels, `NSOpenPanel`, or view-model status text, use Tuist's generated `ExVMsStrings` API instead of hard-coded localization keys.
 
 ## GUI State And Filename Builder
 

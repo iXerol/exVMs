@@ -107,8 +107,8 @@ private struct FilenameTextEditor: NSViewRepresentable {
         textView.minSize = NSSize(width: 0, height: 44)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: 44)
         textView.frame = NSRect(x: 0, y: 0, width: 1_000, height: 44)
-        textView.setAccessibilityLabel(ExVMsAppStrings.Accessibility.Filename.pattern)
-        textView.setAccessibilityHelp(ExVMsAppStrings.Accessibility.Filename.Pattern.help)
+        textView.setAccessibilityLabel(ExVMsStrings.Accessibility.Filename.pattern)
+        textView.setAccessibilityHelp(ExVMsStrings.Accessibility.Filename.Pattern.help)
         textView.filenameAccessibilityValue = recipe.accessibilityDescription
 
         scrollView.documentView = textView
