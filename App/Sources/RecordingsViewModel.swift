@@ -17,10 +17,10 @@ struct RecordingRow: Identifiable, Hashable {
         return FileManager.default.fileExists(atPath: sourcePath.string)
     }
     var title: String { recording.title }
-    var folderDisplayName: String { recording.folderName?.nilIfEmpty ?? ExVMsAppStrings.Folder.none }
+    var folderDisplayName: String { recording.folderName?.nilIfEmpty ?? ExVMsStrings.Folder.none }
     var recordedDate: Date { recording.recordingDate }
     var duration: TimeInterval { recording.duration }
-    var availabilityLabel: String { exported ? ExVMsAppStrings.Availability.exported : recording.availability.label }
+    var availabilityLabel: String { exported ? ExVMsStrings.Availability.exported : recording.availability.label }
 }
 
 @MainActor
@@ -133,7 +133,7 @@ final class RecordingsViewModel {
         } catch {
             errorMessage = error.localizedDescription
             if needsFullDiskAccessHelp {
-                fullDiskAccessMessage = ExVMsAppStrings.Error.VoiceMemosAccess.generic
+                fullDiskAccessMessage = ExVMsStrings.Error.VoiceMemosAccess.generic
             }
         }
         isLoading = false
@@ -152,7 +152,7 @@ final class RecordingsViewModel {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = ExVMsAppStrings.Action.choose
+        panel.prompt = ExVMsStrings.Action.choose
         if panel.runModal() == .OK, let url = panel.url {
             outputDirectory = FilePath(url.path)
         }
@@ -252,7 +252,7 @@ final class RecordingsViewModel {
                 return nil
             } catch {
                 if isPermissionDenied(error) {
-                    return ExVMsAppStrings.Error.VoiceMemosAccess.path(directory.path)
+                    return ExVMsStrings.Error.VoiceMemosAccess.path(directory.path)
                 }
             }
         }
@@ -284,7 +284,7 @@ final class RecordingsViewModel {
                 try handle.close()
             } catch {
                 if isPermissionDenied(error) {
-                    return ExVMsAppStrings.Error.VoiceMemosAccess.path(databaseURL.path)
+                    return ExVMsStrings.Error.VoiceMemosAccess.path(databaseURL.path)
                 }
             }
         }

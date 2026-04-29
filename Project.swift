@@ -6,7 +6,7 @@ let rustBuildScript = """
 
 let displayName = "exVMs"
 let version = "1.0.0"
-let bundleVersion = "260428"
+let bundleVersion = "260429"
 let utilityCategory = "public.app-category.utilities"
 
 let project = Project(
@@ -22,6 +22,7 @@ let project = Project(
             name: "exVMsApp",
             destinations: .macOS,
             product: .app,
+            productName: "exVMs",
             bundleId: "com.ixerol.exvms",
             deploymentTargets: .macOS("14.0"),
             infoPlist: .extendingDefault(with: [

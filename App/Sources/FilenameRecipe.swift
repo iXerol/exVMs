@@ -16,9 +16,9 @@ enum FilenameToken: String, CaseIterable, Identifiable, Codable {
     var label: String {
         switch self {
         case .title:
-            ExVMsAppStrings.Token.title
+            ExVMsStrings.Token.title
         case .id:
-            ExVMsAppStrings.Token.id
+            ExVMsStrings.Token.id
         case .year:
             "YYYY"
         case .month:
@@ -37,21 +37,21 @@ enum FilenameToken: String, CaseIterable, Identifiable, Codable {
     var accessibilityName: String {
         switch self {
         case .title:
-            ExVMsAppStrings.Token.title
+            ExVMsStrings.Token.title
         case .id:
-            ExVMsAppStrings.Token.id
+            ExVMsStrings.Token.id
         case .year:
-            ExVMsAppStrings.Token.year
+            ExVMsStrings.Token.year
         case .month:
-            ExVMsAppStrings.Token.month
+            ExVMsStrings.Token.month
         case .day:
-            ExVMsAppStrings.Token.day
+            ExVMsStrings.Token.day
         case .hour:
-            ExVMsAppStrings.Token.hour
+            ExVMsStrings.Token.hour
         case .minute:
-            ExVMsAppStrings.Token.minute
+            ExVMsStrings.Token.minute
         case .second:
-            ExVMsAppStrings.Token.second
+            ExVMsStrings.Token.second
         }
     }
 
@@ -107,9 +107,9 @@ enum FilenamePart: Identifiable, Hashable, Codable {
     var accessibilityFragment: String {
         switch self {
         case .token(_, let token):
-            ExVMsAppStrings.Accessibility.Filename.token(token.accessibilityName)
+            ExVMsStrings.Accessibility.Filename.token(token.accessibilityName)
         case .literal(_, let value):
-            value.isEmpty ? "" : ExVMsAppStrings.Accessibility.Filename.literal(value)
+            value.isEmpty ? "" : ExVMsStrings.Accessibility.Filename.literal(value)
         }
     }
 }
