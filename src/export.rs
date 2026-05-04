@@ -22,8 +22,9 @@ pub enum SelectionMode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Availability {
-    Local,
+    InRecordingsDirectory,
     NeedsDownload(String),
+    Corrupted(String),
     OutsideRecordingsDir(String),
 }
 
@@ -84,11 +85,11 @@ pub fn plan_exports_with_template(
     let selected = select_recordings(recordings, requested_ids)?;
     let mut planned = Vec::new();
     let mut skipped = Vec::new();
-    let mut needs_download_requested = Vec::new();
+    let mut unavailable_requested = Vec::new();
 
     for recording in selected {
         match ensure_exportable_availability(recordings_dir, recording)? {
-            Availability::Local => {
+            Availability::InRecordingsDirectory => {
                 planned.push(plan_single(
                     recordings_dir,
                     output_dir,
@@ -98,7 +99,17 @@ pub fn plan_exports_with_template(
             }
             Availability::NeedsDownload(reason) => {
                 if mode == SelectionMode::ExplicitIds {
-                    needs_download_requested.push(recording.id);
+                    unavailable_requested.push(recording.id);
+                    continue;
+                }
+                skipped.push(SkippedRecording {
+                    id: recording.id,
+                    reason,
+                });
+            }
+            Availability::Corrupted(reason) => {
+                if mode == SelectionMode::ExplicitIds {
+                    unavailable_requested.push(recording.id);
                     continue;
                 }
                 skipped.push(SkippedRecording {
@@ -115,17 +126,15 @@ pub fn plan_exports_with_template(
         }
     }
 
-    if !needs_download_requested.is_empty() {
-        return Err(ExvmsError::NeedsDownloadRequested(needs_download_requested));
+    if !unavailable_requested.is_empty() {
+        return Err(ExvmsError::NeedsDownloadRequested(unavailable_requested));
     }
 
     if planned.is_empty() && (mode == SelectionMode::ExplicitIds || skipped.is_empty()) {
         return Err(ExvmsError::NoExportableRecordings);
     }
 
-    if !template.contains_id() {
-        disambiguate_duplicate_targets(&mut planned);
-    }
+    disambiguate_targets(&mut planned);
 
     validate_targets(&planned)?;
     Ok((planned, skipped))
@@ -247,8 +256,21 @@ fn classify_availability_inner(
         Err(err) => return Err(err),
     };
 
+    if recording.local_duration <= 0.0 {
+        return Ok(Availability::NeedsDownload(
+            "local duration is 0; open/download it in Voice Memos.app first".to_string(),
+        ));
+    }
+
     match source.metadata() {
-        Ok(meta) if meta.len() > 0 => Ok(Availability::Local),
+        Ok(meta) if meta.len() > 0 => {
+            if let Err(reason) =
+                validate_audio_container_and_duration(&source, recording.local_duration)
+            {
+                return Ok(Availability::Corrupted(reason));
+            }
+            Ok(Availability::InRecordingsDirectory)
+        }
         Ok(_) => Ok(Availability::NeedsDownload(
             "local audio file is 0 bytes; open/download it in Voice Memos.app first".to_string(),
         )),
@@ -260,6 +282,33 @@ fn classify_availability_inner(
             message: err.to_string(),
         }),
     }
+}
+
+fn validate_audio_container_and_duration(
+    path: &Path,
+    expected_duration: f64,
+) -> std::result::Result<(), String> {
+    let actual_duration = match macos::audio_duration_seconds(path) {
+        Ok(seconds) => seconds,
+        Err(err) => {
+            return Err(format!(
+                "failed to read audio container duration: {err}"
+            ));
+        }
+    };
+
+    if !duration_matches(expected_duration, actual_duration) {
+        return Err(format!(
+            "audio duration mismatch: database={expected_duration:.3}s, file={actual_duration:.3}s"
+        ));
+    }
+
+    Ok(())
+}
+
+fn duration_matches(expected: f64, actual: f64) -> bool {
+    const DURATION_TOLERANCE_SECONDS: f64 = 5.0;
+    (expected - actual).abs() <= DURATION_TOLERANCE_SECONDS
 }
 
 fn plan_single(
@@ -330,24 +379,36 @@ fn has_matching_extension(filename: &str, extension: &str) -> bool {
     filename.to_ascii_lowercase().ends_with(&expected)
 }
 
-fn disambiguate_duplicate_targets(planned: &mut [PlannedExport]) {
-    let mut groups: HashMap<PathBuf, Vec<usize>> = HashMap::new();
-    for (index, item) in planned.iter().enumerate() {
-        groups.entry(item.target.clone()).or_default().push(index);
-    }
-
-    for indexes in groups.into_values() {
-        if indexes.len() < 2 {
-            continue;
-        }
-        for index in indexes {
-            let target = planned[index].target.clone();
-            planned[index].target = append_id_before_extension(&target, planned[index].id);
-        }
+fn disambiguate_targets(planned: &mut [PlannedExport]) {
+    let mut reserved = HashSet::new();
+    for item in planned {
+        let unique = next_available_target(&item.target, &mut reserved);
+        item.target = unique;
     }
 }
 
-fn append_id_before_extension(path: &Path, id: i64) -> PathBuf {
+fn next_available_target(path: &Path, reserved: &mut HashSet<PathBuf>) -> PathBuf {
+    if is_target_available(path, reserved) {
+        let output = path.to_path_buf();
+        reserved.insert(output.clone());
+        return output;
+    }
+
+    for suffix in 2.. {
+        let candidate = append_numeric_suffix(path, suffix);
+        if is_target_available(&candidate, reserved) {
+            reserved.insert(candidate.clone());
+            return candidate;
+        }
+    }
+    unreachable!("numeric suffix generator must eventually find an available path")
+}
+
+fn is_target_available(path: &Path, reserved: &HashSet<PathBuf>) -> bool {
+    !reserved.contains(path) && !path.exists()
+}
+
+fn append_numeric_suffix(path: &Path, suffix: usize) -> PathBuf {
     let parent = path.parent().map(Path::to_path_buf).unwrap_or_default();
     let file_name = path
         .file_name()
@@ -358,10 +419,10 @@ fn append_id_before_extension(path: &Path, id: i64) -> PathBuf {
         path.extension().and_then(|value| value.to_str()),
     ) {
         (Some(stem), Some(extension)) if !extension.is_empty() => {
-            format!("{stem} {id}.{extension}")
+            format!("{stem} {suffix}.{extension}")
         }
-        (Some(stem), _) => format!("{stem} {id}"),
-        _ => format!("{file_name} {id}"),
+        (Some(stem), _) => format!("{stem} {suffix}"),
+        _ => format!("{file_name} {suffix}"),
     };
     parent.join(new_name)
 }
@@ -525,12 +586,6 @@ fn path_from_components(components: &[OsString]) -> PathBuf {
 fn validate_targets(planned: &[PlannedExport]) -> Result<()> {
     let mut by_target: HashMap<PathBuf, Vec<i64>> = HashMap::new();
     for item in planned {
-        if item.target.exists() {
-            return Err(ExvmsError::TargetExists {
-                id: item.id,
-                path: item.target.clone(),
-            });
-        }
         by_target
             .entry(item.target.clone())
             .or_default()
@@ -556,6 +611,7 @@ mod tests {
     use super::*;
     use crate::db::RecordingStoreKind;
     use crate::template::FilenameTemplate;
+    use hound::{SampleFormat, WavSpec, WavWriter};
     use std::io::Write;
 
     fn recording(id: i64, title: &str, rel: &str, folder: Option<&str>) -> Recording {
@@ -579,6 +635,18 @@ mod tests {
             folder_id: folder.map(|_| 1),
             folder_name: folder.map(ToOwned::to_owned),
         }
+    }
+
+    fn recording_with_local_duration(
+        id: i64,
+        title: &str,
+        rel: &str,
+        folder: Option<&str>,
+        local_duration: f64,
+    ) -> Recording {
+        let mut row = recording(id, title, rel, folder);
+        row.local_duration = local_duration;
+        row
     }
 
     #[test]
@@ -630,11 +698,10 @@ mod tests {
     #[test]
     fn all_selection_skips_cloud_only_file() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut local = fs::File::create(tmp.path().join("one.m4a")).unwrap();
-        writeln!(local, "audio").unwrap();
+        create_valid_wav(&tmp.path().join("one.wav"));
         fs::File::create(tmp.path().join("two.m4a")).unwrap();
         let rows = vec![
-            recording(1, "One", "one.m4a", None),
+            recording(1, "One", "one.wav", None),
             recording(2, "Two", "two.m4a", None),
         ];
         let (planned, skipped) = plan_exports(
@@ -716,13 +783,12 @@ mod tests {
             .path()
             .join("Volumes/Restore_iMac/Users/example/Library/Application Support/com.apple.voicememos/Recordings");
         fs::create_dir_all(&recordings_dir).unwrap();
-        let mut source = fs::File::create(recordings_dir.join("legacy.m4a")).unwrap();
-        writeln!(source, "audio").unwrap();
+        create_valid_wav(&recordings_dir.join("legacy.wav"));
 
         let row = recording(
             1,
             "Legacy",
-            "/Users/example/Library/Application Support/com.apple.voicememos/Recordings/legacy.m4a",
+            "/Users/example/Library/Application Support/com.apple.voicememos/Recordings/legacy.wav",
             None,
         );
         let (planned, skipped) = plan_exports(
@@ -734,16 +800,48 @@ mod tests {
         )
         .unwrap();
         assert!(skipped.is_empty());
-        assert_eq!(planned[0].source, recordings_dir.join("legacy.m4a"));
+        assert_eq!(planned[0].source, recordings_dir.join("legacy.wav"));
+    }
+
+    #[test]
+    fn classify_invalid_audio_file_as_corrupted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut invalid = fs::File::create(tmp.path().join("broken.m4a")).unwrap();
+        writeln!(invalid, "not audio").unwrap();
+        let row = recording(1, "Broken", "broken.m4a", None);
+        let availability = classify_availability(tmp.path(), &row).unwrap();
+        assert!(matches!(availability, Availability::Corrupted(_)));
+    }
+
+    #[test]
+    fn classify_duration_mismatch_file_as_corrupted() {
+        let tmp = tempfile::tempdir().unwrap();
+        create_valid_wav(&tmp.path().join("one.wav"));
+        let row = recording_with_local_duration(1, "One", "one.wav", None, 30.0);
+        let availability = classify_availability(tmp.path(), &row).unwrap();
+        assert!(matches!(availability, Availability::Corrupted(_)));
+    }
+
+    fn create_valid_wav(path: &Path) {
+        let spec = WavSpec {
+            channels: 1,
+            sample_rate: 8_000,
+            bits_per_sample: 16,
+            sample_format: SampleFormat::Int,
+        };
+        let mut writer = WavWriter::create(path, spec).unwrap();
+        for _ in 0..8_000 {
+            writer.write_sample::<i16>(0).unwrap();
+        }
+        writer.finalize().unwrap();
     }
 
     #[test]
     fn legacy_absolute_path_can_fallback_to_existing_basename() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut source = fs::File::create(tmp.path().join("legacy.m4a")).unwrap();
-        writeln!(source, "audio").unwrap();
+        create_valid_wav(&tmp.path().join("legacy.wav"));
 
-        let row = recording(1, "Legacy", "/private/old/location/legacy.m4a", None);
+        let row = recording(1, "Legacy", "/private/old/location/legacy.wav", None);
         let (planned, skipped) = plan_exports(
             tmp.path(),
             &tmp.path().join("out"),
@@ -753,19 +851,18 @@ mod tests {
         )
         .unwrap();
         assert!(skipped.is_empty());
-        assert_eq!(planned[0].source, tmp.path().join("legacy.m4a"));
+        assert_eq!(planned[0].source, tmp.path().join("legacy.wav"));
     }
 
     #[test]
-    fn default_template_auto_appends_id_after_sanitization_collision() {
+    fn default_template_uses_macos_numeric_suffix_on_collision() {
         let tmp = tempfile::tempdir().unwrap();
-        for name in ["one.m4a", "two.m4a"] {
-            let mut file = fs::File::create(tmp.path().join(name)).unwrap();
-            writeln!(file, "audio").unwrap();
+        for name in ["one.wav", "two.wav"] {
+            create_valid_wav(&tmp.path().join(name));
         }
         let rows = vec![
-            recording(1, "A/B", "one.m4a", None),
-            recording(2, "A:B", "two.m4a", None),
+            recording(1, "A/B", "one.wav", None),
+            recording(2, "A:B", "two.wav", None),
         ];
         let (planned, _) = plan_exports(
             tmp.path(),
@@ -780,35 +877,33 @@ mod tests {
                 .iter()
                 .map(|row| row.target.file_name().unwrap().to_str().unwrap())
                 .collect::<Vec<_>>(),
-            vec!["A_B 1.m4a", "A_B 2.m4a"]
+            vec!["A_B.wav", "A_B 2.wav"]
         );
     }
 
     #[test]
-    fn detects_existing_target() {
+    fn existing_target_gets_macos_numeric_suffix() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut source = fs::File::create(tmp.path().join("one.m4a")).unwrap();
-        writeln!(source, "audio").unwrap();
+        create_valid_wav(&tmp.path().join("one.wav"));
         fs::create_dir(tmp.path().join("out")).unwrap();
-        fs::File::create(tmp.path().join("out").join("One.m4a")).unwrap();
-        let rows = vec![recording(1, "One", "one.m4a", None)];
-        let err = plan_exports(
+        fs::File::create(tmp.path().join("out").join("One.wav")).unwrap();
+        let rows = vec![recording(1, "One", "one.wav", None)];
+        let (planned, _) = plan_exports(
             tmp.path(),
             &tmp.path().join("out"),
             &rows,
             None,
             SelectionMode::All,
         )
-        .unwrap_err();
-        assert!(matches!(err, ExvmsError::TargetExists { .. }));
+        .unwrap();
+        assert_eq!(planned[0].target, tmp.path().join("out").join("One 2.wav"));
     }
 
     #[test]
     fn plans_folder_output() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut source = fs::File::create(tmp.path().join("one.m4a")).unwrap();
-        writeln!(source, "audio").unwrap();
-        let rows = vec![recording(1, "One", "one.m4a", Some("Folder/Name"))];
+        create_valid_wav(&tmp.path().join("one.wav"));
+        let rows = vec![recording(1, "One", "one.wav", Some("Folder/Name"))];
         let (planned, _) = plan_exports(
             tmp.path(),
             &tmp.path().join("out"),
@@ -819,16 +914,15 @@ mod tests {
         .unwrap();
         assert_eq!(
             planned[0].target,
-            tmp.path().join("out").join("Folder_Name").join("One.m4a")
+            tmp.path().join("out").join("Folder_Name").join("One.wav")
         );
     }
 
     #[test]
     fn default_template_keeps_existing_filename_behavior() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut source = fs::File::create(tmp.path().join("one.m4a")).unwrap();
-        writeln!(source, "audio").unwrap();
-        let rows = vec![recording(1, "One", "one.m4a", None)];
+        create_valid_wav(&tmp.path().join("one.wav"));
+        let rows = vec![recording(1, "One", "one.wav", None)];
         let (planned, _) = plan_exports(
             tmp.path(),
             &tmp.path().join("out"),
@@ -837,16 +931,15 @@ mod tests {
             SelectionMode::All,
         )
         .unwrap();
-        assert_eq!(planned[0].target, tmp.path().join("out").join("One.m4a"));
+        assert_eq!(planned[0].target, tmp.path().join("out").join("One.wav"));
     }
 
     #[test]
     fn custom_template_renders_expected_filename() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut source = fs::File::create(tmp.path().join("one.m4a")).unwrap();
-        writeln!(source, "audio").unwrap();
+        create_valid_wav(&tmp.path().join("one.wav"));
         let template = FilenameTemplate::parse("{id} {title}").unwrap();
-        let rows = vec![recording(1, "One", "one.m4a", None)];
+        let rows = vec![recording(1, "One", "one.wav", None)];
         let (planned, _) = plan_exports_with_template(
             tmp.path(),
             &tmp.path().join("out"),
@@ -856,20 +949,19 @@ mod tests {
             &template,
         )
         .unwrap();
-        assert_eq!(planned[0].target, tmp.path().join("out").join("1 One.m4a"));
+        assert_eq!(planned[0].target, tmp.path().join("out").join("1 One.wav"));
     }
 
     #[test]
-    fn custom_template_auto_appends_id_for_batch_collisions() {
+    fn custom_template_uses_macos_numeric_suffix_for_batch_collisions() {
         let tmp = tempfile::tempdir().unwrap();
-        for name in ["one.m4a", "two.m4a"] {
-            let mut source = fs::File::create(tmp.path().join(name)).unwrap();
-            writeln!(source, "audio").unwrap();
+        for name in ["one.wav", "two.wav"] {
+            create_valid_wav(&tmp.path().join(name));
         }
         let template = FilenameTemplate::parse("{date:%Y-%m-%d}").unwrap();
         let rows = vec![
-            recording(1, "One", "one.m4a", None),
-            recording(2, "Two", "two.m4a", None),
+            recording(1, "One", "one.wav", None),
+            recording(2, "Two", "two.wav", None),
         ];
         let (planned, _) = plan_exports_with_template(
             tmp.path(),
@@ -891,43 +983,20 @@ mod tests {
                     .to_string()
             })
             .collect::<Vec<_>>();
-        assert!(targets.iter().all(|name| name.ends_with(".m4a")));
-        assert_ne!(targets[0], targets[1]);
-        assert!(targets.iter().any(|name| name.contains(" 1.")));
-        assert!(targets.iter().any(|name| name.contains(" 2.")));
+        assert_eq!(targets, vec!["2001-01-01.wav", "2001-01-01 2.wav"]);
     }
 
     #[test]
-    fn custom_template_with_id_does_not_auto_disambiguate() {
+    fn custom_template_with_id_still_disambiguates_if_collision_occurs() {
         let tmp = tempfile::tempdir().unwrap();
-        for name in ["one.m4a", "two.m4a"] {
-            let mut source = fs::File::create(tmp.path().join(name)).unwrap();
-            writeln!(source, "audio").unwrap();
+        for name in ["one.wav", "two.wav"] {
+            create_valid_wav(&tmp.path().join(name));
         }
         let template = FilenameTemplate::parse("{id}").unwrap();
         let rows = vec![
-            recording(1, "One", "one.m4a", None),
-            recording(1, "Two", "two.m4a", None),
+            recording(1, "One", "one.wav", None),
+            recording(1, "Two", "two.wav", None),
         ];
-        let err = plan_exports_with_template(
-            tmp.path(),
-            &tmp.path().join("out"),
-            &rows,
-            None,
-            SelectionMode::All,
-            &template,
-        )
-        .unwrap_err();
-        assert!(matches!(err, ExvmsError::TargetCollision { .. }));
-    }
-
-    #[test]
-    fn template_filename_does_not_duplicate_extension() {
-        let tmp = tempfile::tempdir().unwrap();
-        let mut source = fs::File::create(tmp.path().join("one.m4a")).unwrap();
-        writeln!(source, "audio").unwrap();
-        let template = FilenameTemplate::parse("{title}.m4a").unwrap();
-        let rows = vec![recording(1, "One", "one.m4a", None)];
         let (planned, _) = plan_exports_with_template(
             tmp.path(),
             &tmp.path().join("out"),
@@ -937,6 +1006,28 @@ mod tests {
             &template,
         )
         .unwrap();
-        assert_eq!(planned[0].target, tmp.path().join("out").join("One.m4a"));
+        let targets = planned
+            .iter()
+            .map(|row| row.target.file_name().unwrap().to_str().unwrap().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(targets, vec!["1.wav", "1 2.wav"]);
+    }
+
+    #[test]
+    fn template_filename_does_not_duplicate_extension() {
+        let tmp = tempfile::tempdir().unwrap();
+        create_valid_wav(&tmp.path().join("one.wav"));
+        let template = FilenameTemplate::parse("{title}.wav").unwrap();
+        let rows = vec![recording(1, "One", "one.wav", None)];
+        let (planned, _) = plan_exports_with_template(
+            tmp.path(),
+            &tmp.path().join("out"),
+            &rows,
+            None,
+            SelectionMode::All,
+            &template,
+        )
+        .unwrap();
+        assert_eq!(planned[0].target, tmp.path().join("out").join("One.wav"));
     }
 }

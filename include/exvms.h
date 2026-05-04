@@ -29,9 +29,11 @@ typedef NS_ENUM(int32_t, ExvmsPathKind) {
 } NS_SWIFT_NAME(ExvmsPathKind);
 
 typedef NS_ENUM(int32_t, ExvmsAvailability) {
-    ExvmsAvailabilityLocal = 0,
+    ExvmsAvailabilityInRecordingsDirectory = 0,
     ExvmsAvailabilityNeedsDownload = 1,
     ExvmsAvailabilityOutsideRecordingsDirectory = 2,
+    ExvmsAvailabilityCorrupted = 3,
+    ExvmsAvailabilityChecking = 4,
 } NS_SWIFT_NAME(ExvmsAvailability);
 
 typedef struct ExvmsStoreResult {

@@ -94,9 +94,12 @@ fn view() -> exvms::Result<()> {
 
     for row in rows {
         let availability = match export::classify_availability(&store.recordings_dir, &row)? {
-            export::Availability::Local => "local".to_string(),
-            export::Availability::NeedsDownload(_) => "needs-download".to_string(),
-            export::Availability::OutsideRecordingsDir(_) => "outside-recordings-dir".to_string(),
+            export::Availability::InRecordingsDirectory => "in-recordings-directory".to_string(),
+            export::Availability::NeedsDownload(reason) => format!("needs-download ({reason})"),
+            export::Availability::Corrupted(reason) => format!("corrupted ({reason})"),
+            export::Availability::OutsideRecordingsDir(path) => {
+                format!("outside-recordings-dir ({path})")
+            }
         };
         write_table_row(
             &mut out,

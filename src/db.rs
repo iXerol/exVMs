@@ -177,6 +177,7 @@ fn load_cloud_recordings(conn: &Connection, kind: DatabaseKind) -> Result<Vec<Re
     let custom_label_expr = optional_column_expr(&recording_columns, "ZCUSTOMLABEL");
     let unique_id_expr = optional_column_expr(&recording_columns, "ZUNIQUEID");
     let local_duration_expr = optional_column_expr(&recording_columns, "ZLOCALDURATION");
+    let has_local_duration_column = recording_columns.contains("ZLOCALDURATION");
     let eviction_date_expr = optional_column_expr(&recording_columns, "ZEVICTIONDATE");
     let folder_id_expr = optional_column_expr(&recording_columns, "ZFOLDER");
     let folder_name_expr = if has_folder_join {
@@ -225,16 +226,26 @@ fn load_cloud_recordings(conn: &Connection, kind: DatabaseKind) -> Result<Vec<Re
         let unique_id = row.get(3)?;
         let raw_path: String = row.get(4)?;
         let duration = row.get(6)?;
-        let local_duration = row
-            .get::<_, Option<f64>>(7)?
-            .filter(|value| *value > 0.0)
-            .unwrap_or(if duration > 0.0 { duration } else { 0.0 });
+        let local_duration = if has_local_duration_column {
+            row.get::<_, Option<f64>>(7)?
+                .filter(|value| *value > 0.0)
+                .unwrap_or(0.0)
+        } else if duration > 0.0 {
+            duration
+        } else {
+            0.0
+        };
+        let effective_duration = if local_duration > 0.0 {
+            local_duration
+        } else {
+            duration
+        };
 
         Ok(Recording {
             id,
             title: title_from_fields(id, encrypted_title, custom_label, unique_id, &raw_path),
             recorded_at: row.get(5)?,
-            duration,
+            duration: effective_duration,
             local_duration,
             eviction_date: row.get(8)?,
             db_path: raw_path.clone(),
@@ -365,7 +376,9 @@ mod tests {
         let rows = load_recordings_from_connection(&conn).unwrap();
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[0].id, 3);
+        assert_eq!(rows[0].local_duration, 0.0);
         assert_eq!(rows[0].store_kind, RecordingStoreKind::CloudRecordings);
+        assert_eq!(rows[1].duration, 62.0);
         assert_eq!(rows[1].folder_name.as_deref(), Some("Projects"));
         assert_eq!(rows[2].title, "One");
     }
@@ -495,7 +508,7 @@ mod tests {
                 (Z_PK, ZFOLDER, ZDATE, ZDURATION, ZLOCALDURATION, ZENCRYPTEDTITLE, ZPATH)
             VALUES
                 (1, NULL, 10.0, 61.0, 61.0, 'One', 'one.m4a'),
-                (2, 10, 20.0, 62.0, 62.0, 'Two', 'two.m4a'),
+                (2, 10, 20.0, 999.0, 62.0, 'Two', 'two.m4a'),
                 (3, NULL, 30.0, 63.0, 0.0, 'Three', 'three.m4a');
             "#,
         )

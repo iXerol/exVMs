@@ -4,7 +4,7 @@ use std::path::Path;
 use std::ptr;
 
 use crate::db::{self, RecordingPathKind, RecordingStoreKind};
-use crate::export::{self, Availability, SelectionMode};
+use crate::export::{self, SelectionMode};
 use crate::storage;
 use crate::template::FilenameTemplate;
 use crate::{ExvmsError, Result};
@@ -105,12 +105,6 @@ pub extern "C" fn exvms_list_recordings() -> ExvmsListResult {
         let mut recordings = Vec::with_capacity(rows.len());
 
         for row in rows {
-            let (availability, availability_detail) =
-                match export::classify_availability(&store.recordings_dir, &row)? {
-                    Availability::Local => (0, None),
-                    Availability::NeedsDownload(reason) => (1, Some(reason)),
-                    Availability::OutsideRecordingsDir(path) => (2, Some(path)),
-                };
             recordings.push(ExvmsRecording {
                 id: row.id,
                 title: string_to_c_string(row.title),
@@ -128,8 +122,8 @@ pub extern "C" fn exvms_list_recordings() -> ExvmsListResult {
                     RecordingPathKind::Absolute => 1,
                     RecordingPathKind::Missing => 2,
                 },
-                availability,
-                availability_detail: optional_string_to_c_string(availability_detail),
+                availability: 4,
+                availability_detail: ptr::null_mut(),
             });
         }
 

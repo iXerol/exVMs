@@ -24,6 +24,7 @@ thiserror = "2.0.18"
 unicode-width = { version = "0.2.2", optional = true }
 
 [dev-dependencies]
+hound = "3.5.1"
 tempfile = "3.24.0"
 
 [[bin]]
