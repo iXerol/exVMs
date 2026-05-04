@@ -4,9 +4,7 @@
 ![App macOS 14.0+](https://img.shields.io/badge/App-macOS%2014.0%2B-blue)
 [![Build](https://github.com/iXerol/exVMs/actions/workflows/build.yml/badge.svg)](https://github.com/iXerol/exVMs/actions/workflows/build.yml)
 
-<p>
-  <img src="docs/assets/app-icon.png" alt="exVMs app icon" width="256">
-</p>
+![exVMs app icon](App/Resources/Assets.xcassets/AppIcon.appiconset/icon_512.png)
 
 `exVMs` exports local recordings from Voice Memos.app on macOS.
 
