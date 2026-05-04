@@ -295,23 +295,31 @@ private struct FilenameTokenChip: View {
         Button {
             onInsert()
         } label: {
-            Text(token.label)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(
-                    width: token.inlineSize.width,
-                    height: FilenameTokenStyle.height
-                )
-                .background {
-                    Capsule()
-                        .fill(FilenameTokenStyle.swiftUIColor)
-                        .strokeBorder(FilenameTokenStyle.swiftUIStrokeColor, lineWidth: FilenameTokenStyle.strokeWidth)
-                }
+            FilenameTokenPill(token: token)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("accessibility.filename.insert_token \(token.accessibilityName)")
         .accessibilityHint("accessibility.filename.insert_token.hint")
         .help(Text("help.filename.insert_token \(token.accessibilityName)"))
+    }
+}
+
+private struct FilenameTokenPill: View {
+    var token: FilenameToken
+
+    var body: some View {
+        Text(token.label)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(
+                width: token.inlineSize.width,
+                height: FilenameTokenStyle.height
+            )
+            .background {
+                Capsule()
+                    .fill(FilenameTokenStyle.swiftUIColor)
+                    .strokeBorder(FilenameTokenStyle.swiftUIStrokeColor, lineWidth: FilenameTokenStyle.strokeWidth)
+            }
     }
 }
 
@@ -362,28 +370,12 @@ private extension FilenameToken {
     }
 
     func capsuleImage() -> NSImage {
-        let size = NSSize(width: inlineSize.width, height: inlineSize.height)
-        let image = NSImage(size: size)
-        image.lockFocus()
-        defer { image.unlockFocus() }
-
-        let rect = NSRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)
-        let path = NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2)
-        FilenameTokenStyle.nsColor.setFill()
-        path.fill()
-        FilenameTokenStyle.nsStrokeColor.setStroke()
-        path.lineWidth = FilenameTokenStyle.strokeWidth
-        path.stroke()
-
-        let attributes = FilenameTokenStyle.textAttributes
-        let textSize = label.size(withAttributes: attributes)
-        let textRect = NSRect(
-            x: (size.width - textSize.width) / 2,
-            y: (size.height - textSize.height) / 2,
-            width: textSize.width,
-            height: textSize.height
-        )
-        label.draw(in: textRect, withAttributes: attributes)
-        return image
+        MainActor.assumeIsolated {
+            let content = FilenameTokenPill(token: self)
+                .frame(width: inlineSize.width, height: inlineSize.height)
+            let renderer = ImageRenderer(content: content)
+            renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+            return renderer.nsImage ?? NSImage(size: NSSize(width: inlineSize.width, height: inlineSize.height))
+        }
     }
 }
