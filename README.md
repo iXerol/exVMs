@@ -1,5 +1,13 @@
 # exVMs
 
+![CLI macOS 10.14+](https://img.shields.io/badge/CLI-macOS%2010.14%2B-blue)
+![App macOS 14.0+](https://img.shields.io/badge/App-macOS%2014.0%2B-blue)
+[![Build](https://github.com/iXerol/exVMs/actions/workflows/build.yml/badge.svg)](https://github.com/iXerol/exVMs/actions/workflows/build.yml)
+
+<p>
+  <img src="docs/assets/app-icon.png" alt="exVMs app icon" width="256">
+</p>
+
 `exVMs` exports local recordings from Voice Memos.app on macOS.
 
 It can be used as either:
@@ -8,6 +16,8 @@ It can be used as either:
 - a local unsandboxed macOS SwiftUI app
 
 The tool reads the active Voice Memos recordings store, lists metadata, and copies local audio files to an output directory without overwriting existing files.
+
+![exVMs macOS app screenshot](docs/assets/app-screenshot.png)
 
 ## CLI
 
