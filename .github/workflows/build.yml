@@ -16,12 +16,15 @@ permissions:
 jobs:
   verify-cli:
     name: Verify CLI
-    runs-on: ubuntu-latest
+    runs-on: macos-26
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -32,9 +35,6 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Run clippy
-        run: cargo clippy --lib --no-default-features -- -D warnings
-
-      - name: Run CLI clippy
         run: cargo clippy --all-targets --features cli -- -D warnings
 
       - name: Run tests

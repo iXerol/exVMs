@@ -199,6 +199,7 @@ private final class FilenameNSTextView: NSTextView {
 @MainActor
 private enum FilenameAttributedText {
     private static let tokenAttribute = NSAttributedString.Key("com.ixerol.exvms.filename-token")
+    private static let attachmentPlaceholder = "\u{fffc}"
 
     static let literalTypingAttributes: [NSAttributedString.Key: Any] = [
         .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
@@ -229,7 +230,7 @@ private enum FilenameAttributedText {
                 return
             }
 
-            if text == String(NSTextAttachment.character) {
+            if text == attachmentPlaceholder {
                 return
             }
             appendLiteral(text, to: &parts)

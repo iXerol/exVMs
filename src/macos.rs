@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::process::Command;
 use std::time::SystemTime;
 
 use filetime::FileTime;
@@ -14,7 +13,7 @@ pub fn set_export_timestamps(path: &Path, timestamp: SystemTime) -> Result<()> {
 
 #[cfg(target_os = "macos")]
 pub fn audio_duration_seconds(path: &Path) -> Result<f64> {
-    let output = Command::new("/usr/bin/afinfo")
+    let output = std::process::Command::new("/usr/bin/afinfo")
         .arg(path)
         .output()
         .map_err(|err| crate::ExvmsError::Macos(format!("failed to run afinfo: {err}")))?;
