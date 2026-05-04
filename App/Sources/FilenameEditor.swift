@@ -360,6 +360,7 @@ private extension FilenameRecipe {
     }
 }
 
+@MainActor
 private extension FilenameToken {
     var inlineSize: CGSize {
         let textSize = label.size(withAttributes: FilenameTokenStyle.textAttributes)
@@ -370,12 +371,10 @@ private extension FilenameToken {
     }
 
     func capsuleImage() -> NSImage {
-        MainActor.assumeIsolated {
-            let content = FilenameTokenPill(token: self)
-                .frame(width: inlineSize.width, height: inlineSize.height)
-            let renderer = ImageRenderer(content: content)
-            renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
-            return renderer.nsImage ?? NSImage(size: NSSize(width: inlineSize.width, height: inlineSize.height))
-        }
+        let content = FilenameTokenPill(token: self)
+            .frame(width: inlineSize.width, height: inlineSize.height)
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+        return renderer.nsImage ?? NSImage(size: NSSize(width: inlineSize.width, height: inlineSize.height))
     }
 }

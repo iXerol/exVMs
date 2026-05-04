@@ -291,9 +291,7 @@ fn validate_audio_container_and_duration(
     let actual_duration = match macos::audio_duration_seconds(path) {
         Ok(seconds) => seconds,
         Err(err) => {
-            return Err(format!(
-                "failed to read audio container duration: {err}"
-            ));
+            return Err(format!("failed to read audio container duration: {err}"));
         }
     };
 
@@ -1008,7 +1006,14 @@ mod tests {
         .unwrap();
         let targets = planned
             .iter()
-            .map(|row| row.target.file_name().unwrap().to_str().unwrap().to_string())
+            .map(|row| {
+                row.target
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            })
             .collect::<Vec<_>>();
         assert_eq!(targets, vec!["1.wav", "1 2.wav"]);
     }

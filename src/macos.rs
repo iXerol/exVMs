@@ -23,8 +23,7 @@ pub fn audio_duration_seconds(path: &Path) -> Result<f64> {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(crate::ExvmsError::Macos(format!(
             "afinfo exited with status {}: {}",
-            output.status,
-            stderr
+            output.status, stderr
         )));
     }
 
@@ -32,13 +31,11 @@ pub fn audio_duration_seconds(path: &Path) -> Result<f64> {
     for line in stdout.lines() {
         let value = line.trim();
         if let Some(raw) = value.strip_prefix("estimated duration:") {
-            let number = raw
-                .trim()
-                .strip_suffix("sec")
-                .unwrap_or(raw.trim())
-                .trim();
+            let number = raw.trim().strip_suffix("sec").unwrap_or(raw.trim()).trim();
             let seconds = number.parse::<f64>().map_err(|err| {
-                crate::ExvmsError::Macos(format!("failed to parse afinfo duration `{number}`: {err}"))
+                crate::ExvmsError::Macos(format!(
+                    "failed to parse afinfo duration `{number}`: {err}"
+                ))
             })?;
             if seconds.is_finite() && seconds > 0.0 {
                 return Ok(seconds);
