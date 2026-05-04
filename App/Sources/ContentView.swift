@@ -134,20 +134,33 @@ struct ContentView: View {
                     .disabled(!row.canExport)
                     .accessibilityLabel("accessibility.recording.export \(row.title)")
             }
-            .width(54)
+            .width(min: 30, ideal: 40, max: 45)
             TableColumn("table.column.preview") { row in
-                Button {
-                    viewModel.preview(row: row)
-                } label: {
-                    Image(systemName: "speaker.wave.2.fill")
-                        .accessibilityHidden(true)
+                HStack {
+                    Button {
+                        viewModel.preview(row: row)
+                    } label: {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .accessibilityHidden(true)
+                    }
+                    .disabled(!row.canPreview)
+                    .help(Text("help.recording.preview \(row.title)"))
+                    .accessibilityLabel("accessibility.recording.preview \(row.title)")
+                    .accessibilityHint("accessibility.recording.preview.hint")
+                    Button {
+                        viewModel.revealRecordingInFinder(row: row)
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .accessibilityHidden(true)
+                    }
+                    .disabled(row.recording.sourcePath == nil)
+                    .help(Text("help.recording.reveal_source \(row.title)"))
+                    .accessibilityLabel("accessibility.recording.reveal_source \(row.title)")
+                    .accessibilityHint("accessibility.recording.reveal_source.hint")
                 }
                 .buttonStyle(.borderless)
-                .disabled(!row.canPreview)
-                .help(Text("help.recording.preview \(row.title)"))
-                .accessibilityLabel("accessibility.recording.preview \(row.title)")
             }
-            .width(64)
+            .width(min: 40, max: 60)
             TableColumn("table.column.title", value: \.title) { row in
                 Text(row.title)
                     .lineLimit(1)
@@ -162,25 +175,30 @@ struct ContentView: View {
             TableColumn("table.column.duration", value: \.duration) { row in
                 Text(formatDuration(row.duration))
             }
-            TableColumn("table.column.availability", value: \.availabilityLabel) { row in
-                Text(row.availabilityLabel)
-                    .foregroundStyle(row.canExport ? .primary : .secondary)
+            .width(ideal: 60, max: 100)
+            TableColumn("table.column.size", value: \.sizeSortValue) { row in
+                Text(row.sizeLabel)
             }
-            TableColumn("table.column.target") { row in
-                if let targetPath = row.targetPath?.string {
-                    Text(targetPath)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("prompt.choose_output_directory")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .foregroundStyle(.secondary)
+            .width(ideal: 45, max: 80)
+            TableColumn("table.column.availability", value: \.availabilityLabel) { row in
+                HStack(spacing: 6) {
+                    Text(row.availabilityLabel)
+                        .foregroundStyle(row.canExport ? .primary : .secondary)
+                    if row.exportedPath != nil {
+                        Button {
+                            viewModel.revealExportedFileInFinder(row: row)
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .accessibilityHidden(true)
+                        }
+                        .buttonStyle(.borderless)
+                        .help(Text("help.recording.reveal_exported \(row.title)"))
+                        .accessibilityLabel("accessibility.recording.reveal_exported \(row.title)")
+                        .accessibilityHint("accessibility.recording.reveal_exported.hint")
+                    }
                 }
             }
         }
-        .disabled(viewModel.isLoading)
     }
 
     private var sortedRows: [RecordingRow] {
@@ -193,6 +211,10 @@ struct ContentView: View {
 
     private var visibleRowsContainSelectedItem: Bool {
         sortedRows.contains { viewModel.selectedIDs.contains($0.id) }
+    }
+
+    private var progressAccessibilityLabel: LocalizedStringKey {
+        viewModel.isExporting ? "accessibility.progress.exporting" : "accessibility.progress.loading"
     }
 
     private var folderFilterBinding: Binding<String?> {
@@ -294,6 +316,7 @@ struct ContentView: View {
             if viewModel.isLoading || viewModel.isExporting {
                 ProgressView()
                     .controlSize(.small)
+                    .accessibilityLabel(progressAccessibilityLabel)
             }
         }
         .font(.caption)

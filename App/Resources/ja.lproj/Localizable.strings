@@ -30,18 +30,18 @@
 "table.column.folder" = "フォルダ";
 "table.column.recorded" = "録音日時";
 "table.column.duration" = "長さ";
+"table.column.size" = "サイズ";
 "table.column.availability" = "状態";
-"table.column.target" = "出力先";
 
 "status.items.count %lld" = "%lld件";
 "status.export_summary %lld %lld %lld" = "書き出し %lld、スキップ %lld、失敗 %lld";
 "status.choose_output_before_export" = "書き出す前に出力先フォルダを選択してください";
 
-"prompt.choose_output_directory" = "書き出し先フォルダを選択";
 
-"availability.local" = "ローカル";
+"availability.in_recordings_directory" = "録音フォルダ内";
 "availability.needs_download" = "ダウンロードが必要";
 "availability.outside_storage" = "ストレージ外";
+"availability.corrupted" = "破損";
 "availability.exported" = "書き出し済み";
 
 "error.recordings.list_failed" = "録音を一覧表示できませんでした";
@@ -63,6 +63,13 @@
 "accessibility.recordings.select_none_visible" = "表示中の録音の書き出し選択を解除";
 "accessibility.recording.export %@" = "%@を書き出す";
 "accessibility.recording.preview %@" = "%@をプレビュー";
+"accessibility.recording.preview.hint" = "ローカルのオーディオファイルをクイックルックで開きます。";
+"accessibility.recording.reveal_source %@" = "%@の元ファイルをFinderで表示";
+"accessibility.recording.reveal_source.hint" = "Finderを開いてローカルのボイスメモファイルを選択します。";
+"accessibility.recording.reveal_exported %@" = "%@の書き出し済みファイルをFinderで表示";
+"accessibility.recording.reveal_exported.hint" = "Finderを開いて一致する書き出し済みファイルを選択します。";
+"accessibility.progress.loading" = "録音を読み込み中";
+"accessibility.progress.exporting" = "録音を書き出し中";
 "accessibility.filename.example" = "ファイル名の例";
 "accessibility.filename.pattern" = "ファイル名パターン";
 "accessibility.filename.pattern.help" = "ファイル名の文字を直接入力するか、上のトークンをクリックしてカーソル位置に挿入します。";
@@ -70,6 +77,15 @@
 "accessibility.filename.insert_token.hint" = "このトークンをファイル名パターンのカーソル位置に追加します。";
 "accessibility.filename.token %@" = "%@トークン";
 "accessibility.filename.literal %@" = "テキスト %@";
+"accessibility.about.project_url" = "GitHub の exVMs プロジェクト";
 
 "help.filename.insert_token %@" = "%@を挿入";
 "help.recording.preview %@" = "クイックルックで%@をプレビュー";
+"help.recording.reveal_source %@" = "%@の元ファイルをFinderで表示";
+"help.recording.reveal_exported %@" = "%@の書き出し済みファイルをFinderで表示";
+
+"about.menu.title" = "exVMsについて";
+"about.window.title" = "exVMsについて";
+"about.project_url" = "https://github.com/iXerol/exVMs";
+
+"availability.checking" = "確認中…";

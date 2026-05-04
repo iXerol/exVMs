@@ -42,7 +42,7 @@ struct FilenameRecipeTests {
             sourcePath: nil,
             pathKind: .relative,
             folderName: "Notes:Drafts",
-            availability: .local,
+            availability: .inRecordingsDirectory,
             availabilityDetail: nil
         )
 

@@ -30,18 +30,18 @@
 "table.column.folder" = "Folder";
 "table.column.recorded" = "Recorded";
 "table.column.duration" = "Duration";
+"table.column.size" = "Size";
 "table.column.availability" = "Availability";
-"table.column.target" = "Target";
 
 "status.items.count %lld" = "%lld items";
 "status.export_summary %lld %lld %lld" = "Exported %lld, skipped %lld, failed %lld";
 "status.choose_output_before_export" = "Choose an output directory before exporting";
 
-"prompt.choose_output_directory" = "Choose output directory";
 
-"availability.local" = "Local";
+"availability.in_recordings_directory" = "In recordings folder";
 "availability.needs_download" = "Needs download";
 "availability.outside_storage" = "Outside storage";
+"availability.corrupted" = "Corrupted";
 "availability.exported" = "Exported";
 
 "error.recordings.list_failed" = "Failed to list recordings";
@@ -63,6 +63,13 @@
 "accessibility.recordings.select_none_visible" = "Clear visible recording export selection";
 "accessibility.recording.export %@" = "Export %@";
 "accessibility.recording.preview %@" = "Preview %@";
+"accessibility.recording.preview.hint" = "Opens the local audio file in Quick Look.";
+"accessibility.recording.reveal_source %@" = "Show source file for %@ in Finder";
+"accessibility.recording.reveal_source.hint" = "Opens Finder and selects the local Voice Memos file.";
+"accessibility.recording.reveal_exported %@" = "Show exported file for %@ in Finder";
+"accessibility.recording.reveal_exported.hint" = "Opens Finder and selects the matching exported file.";
+"accessibility.progress.loading" = "Loading recordings";
+"accessibility.progress.exporting" = "Exporting recordings";
 "accessibility.filename.example" = "Filename example";
 "accessibility.filename.pattern" = "Filename pattern";
 "accessibility.filename.pattern.help" = "Type literal filename text, or click a token above to insert it at the cursor.";
@@ -70,6 +77,15 @@
 "accessibility.filename.insert_token.hint" = "Adds this token to the filename pattern at the cursor.";
 "accessibility.filename.token %@" = "%@ token";
 "accessibility.filename.literal %@" = "text %@";
+"accessibility.about.project_url" = "exVMs project on GitHub";
 
 "help.filename.insert_token %@" = "Insert %@";
 "help.recording.preview %@" = "Preview %@ with Quick Look";
+"help.recording.reveal_source %@" = "Show source file for %@ in Finder";
+"help.recording.reveal_exported %@" = "Show exported file for %@ in Finder";
+
+"about.menu.title" = "About exVMs";
+"about.window.title" = "About exVMs";
+"about.project_url" = "https://github.com/iXerol/exVMs";
+
+"availability.checking" = "Checking…";

@@ -30,18 +30,18 @@
 "table.column.folder" = "文件夹";
 "table.column.recorded" = "录制时间";
 "table.column.duration" = "时长";
+"table.column.size" = "大小";
 "table.column.availability" = "可用性";
-"table.column.target" = "目标";
 
 "status.items.count %lld" = "%lld 项";
 "status.export_summary %lld %lld %lld" = "已导出 %lld，已跳过 %lld，失败 %lld";
 "status.choose_output_before_export" = "导出前请选择导出目录";
 
-"prompt.choose_output_directory" = "选择导出目录";
 
-"availability.local" = "本地";
+"availability.in_recordings_directory" = "位于录音目录内";
 "availability.needs_download" = "需要下载";
 "availability.outside_storage" = "不在存储目录内";
+"availability.corrupted" = "文件损坏";
 "availability.exported" = "已导出";
 
 "error.recordings.list_failed" = "无法列出录音";
@@ -63,6 +63,13 @@
 "accessibility.recordings.select_none_visible" = "清除当前可见录音的导出选择";
 "accessibility.recording.export %@" = "导出 %@";
 "accessibility.recording.preview %@" = "预览 %@";
+"accessibility.recording.preview.hint" = "用快速查看打开本地音频文件。";
+"accessibility.recording.reveal_source %@" = "在访达中显示 %@ 的源文件";
+"accessibility.recording.reveal_source.hint" = "打开访达并选中本地语音备忘录文件。";
+"accessibility.recording.reveal_exported %@" = "在访达中显示 %@ 的已导出文件";
+"accessibility.recording.reveal_exported.hint" = "打开访达并选中匹配的已导出文件。";
+"accessibility.progress.loading" = "正在加载录音";
+"accessibility.progress.exporting" = "正在导出录音";
 "accessibility.filename.example" = "文件名示例";
 "accessibility.filename.pattern" = "文件名格式";
 "accessibility.filename.pattern.help" = "输入文件名文字，或点击上方控件将其插入到光标位置。";
@@ -70,6 +77,15 @@
 "accessibility.filename.insert_token.hint" = "将此控件添加到文件名格式的光标位置。";
 "accessibility.filename.token %@" = "%@控件";
 "accessibility.filename.literal %@" = "文字 %@";
+"accessibility.about.project_url" = "GitHub 上的 exVMs 项目";
 
 "help.filename.insert_token %@" = "插入%@";
 "help.recording.preview %@" = "使用快速查看预览 %@";
+"help.recording.reveal_source %@" = "在访达中显示 %@ 的源文件";
+"help.recording.reveal_exported %@" = "在访达中显示 %@ 的已导出文件";
+
+"about.menu.title" = "关于 exVMs";
+"about.window.title" = "关于 exVMs";
+"about.project_url" = "https://github.com/iXerol/exVMs";
+
+"availability.checking" = "检查中…";

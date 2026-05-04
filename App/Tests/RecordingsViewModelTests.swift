@@ -6,14 +6,14 @@ import Testing
 @MainActor
 struct RecordingsViewModelTests {
     @Test
-    func exportIsDisabledUntilDirectoryAndExportableSelectionExist() {
+    func exportIsDisabledUntilDirectoryAndExportableSelectionExist() async {
         let client = MockExvmsClient(recordings: [
-            .fixture(id: 1, title: "Local", availability: .local),
+            .fixture(id: 1, title: "Local", availability: .inRecordingsDirectory),
             .fixture(id: 2, title: "Cloud", availability: .needsDownload),
         ])
-        let viewModel = RecordingsViewModel(client: client)
+        let viewModel = makeViewModel(client: client)
 
-        viewModel.refresh()
+        await viewModel.refreshAsync()
         #expect(!viewModel.canExportSelection)
 
         viewModel.outputDirectory = FilePath(NSTemporaryDirectory())
@@ -27,34 +27,67 @@ struct RecordingsViewModelTests {
     }
 
     @Test
-    func exportedFileDisablesSelection() throws {
+    func exportedFileDisablesSelection() async throws {
         let tmp = try temporaryDirectory()
+        let source = tmp.appendingPathComponent("Local-source.m4a")
+        let payload = Data("hello-export".utf8)
+        FileManager.default.createFile(atPath: source.path, contents: payload)
         let target = tmp.appendingPathComponent("Local.m4a")
-        FileManager.default.createFile(atPath: target.path, contents: Data())
+        FileManager.default.createFile(atPath: target.path, contents: payload)
 
         let client = MockExvmsClient(recordings: [
-            .fixture(id: 1, title: "Local", availability: .local),
+            .fixture(
+                id: 1,
+                title: "Local",
+                availability: .inRecordingsDirectory,
+                sourcePath: FilePath(source.path)
+            ),
         ])
-        let viewModel = RecordingsViewModel(client: client)
-        viewModel.refresh()
+        let viewModel = makeViewModel(client: client)
         viewModel.outputDirectory = FilePath(tmp.path)
+        await viewModel.refreshAsync()
         viewModel.selectedIDs = [1]
 
         #expect(!viewModel.canExportSelection)
         #expect(viewModel.rows.first?.exported == true)
+        #expect(viewModel.rows.first?.exportedPath == FilePath(target.path))
     }
 
     @Test
-    func successfulExportRefreshesAndClearsSelection() {
+    func exportedStateRequiresHashMatch() async throws {
+        let tmp = try temporaryDirectory()
+        let source = tmp.appendingPathComponent("Local-source.m4a")
+        let target = tmp.appendingPathComponent("Local.m4a")
+        FileManager.default.createFile(atPath: source.path, contents: Data("source-audio".utf8))
+        FileManager.default.createFile(atPath: target.path, contents: Data("different-audio".utf8))
+
         let client = MockExvmsClient(recordings: [
-            .fixture(id: 1, title: "Local", availability: .local),
+            .fixture(
+                id: 1,
+                title: "Local",
+                availability: .inRecordingsDirectory,
+                sourcePath: FilePath(source.path)
+            ),
         ])
-        let viewModel = RecordingsViewModel(client: client)
-        viewModel.refresh()
+        let viewModel = makeViewModel(client: client)
+        viewModel.outputDirectory = FilePath(tmp.path)
+        await viewModel.refreshAsync()
+
+        #expect(viewModel.rows.first?.exported == false)
+        #expect(viewModel.rows.first?.exportedPath == nil)
+    }
+
+    @Test
+    func successfulExportRefreshesAndClearsSelection() async {
+        let client = MockExvmsClient(recordings: [
+            .fixture(id: 1, title: "Local", availability: .inRecordingsDirectory),
+        ])
+        let viewModel = makeViewModel(client: client)
+        await viewModel.refreshAsync()
         viewModel.outputDirectory = FilePath(NSTemporaryDirectory())
         viewModel.selectedIDs = [1]
 
-        viewModel.exportSelection()
+        await viewModel.exportSelectionAsync()
 
         #expect(viewModel.selectedIDs.isEmpty)
         #expect(viewModel.lastExportSummary == ExportSummary(succeeded: 1, skipped: 0, failed: 0))
@@ -95,14 +128,48 @@ struct RecordingsViewModelTests {
     }
 
     @Test
-    func folderFilterReturnsMatchingRowsOnly() {
-        let client = MockExvmsClient(recordings: [
-            .fixture(id: 1, title: "A", availability: .local, folderName: "Work"),
-            .fixture(id: 2, title: "B", availability: .local, folderName: "Personal"),
+    func filenameRecipePersistsAndRestores() throws {
+        let defaults = try temporaryUserDefaults()
+        let recipe = FilenameRecipe(parts: [
+            .token(UUID(), .year),
+            .literal(UUID(), "-"),
+            .token(UUID(), .title),
         ])
-        let viewModel = RecordingsViewModel(client: client)
+        let firstViewModel = RecordingsViewModel(
+            client: MockExvmsClient(recordings: []),
+            userDefaults: defaults
+        )
+        firstViewModel.filenameRecipe = recipe
 
-        viewModel.refresh()
+        let restoredViewModel = RecordingsViewModel(
+            client: MockExvmsClient(recordings: []),
+            userDefaults: defaults
+        )
+        #expect(restoredViewModel.filenameRecipe == recipe)
+    }
+
+    @Test
+    func invalidPersistedFilenameRecipeFallsBackToDefault() throws {
+        let defaults = try temporaryUserDefaults()
+        defaults.set(Data("invalid-json".utf8), forKey: RecordingsViewModel.filenameRecipeDefaultsKey)
+
+        let viewModel = RecordingsViewModel(
+            client: MockExvmsClient(recordings: []),
+            userDefaults: defaults
+        )
+
+        #expect(viewModel.filenameRecipe == .default)
+    }
+
+    @Test
+    func folderFilterReturnsMatchingRowsOnly() async {
+        let client = MockExvmsClient(recordings: [
+            .fixture(id: 1, title: "A", availability: .inRecordingsDirectory, folderName: "Work"),
+            .fixture(id: 2, title: "B", availability: .inRecordingsDirectory, folderName: "Personal"),
+        ])
+        let viewModel = makeViewModel(client: client)
+
+        await viewModel.refreshAsync()
         viewModel.folderFilter = "Work"
 
         #expect(viewModel.folderOptions == ["Personal", "Work"])
@@ -110,13 +177,38 @@ struct RecordingsViewModelTests {
     }
 
     @Test
-    func cannotSelectNonExportableRowForExport() {
+    func exportedStateChecksMacOSSuffixCandidates() async throws {
+        let tmp = try temporaryDirectory()
+        let source = tmp.appendingPathComponent("A_B-source.m4a")
+        let payload = Data("exported-audio".utf8)
+        FileManager.default.createFile(atPath: source.path, contents: payload)
+        let target = tmp.appendingPathComponent("A_B 2.m4a")
+        FileManager.default.createFile(atPath: target.path, contents: payload)
+
+        let client = MockExvmsClient(recordings: [
+            .fixture(
+                id: 1,
+                title: "A/B",
+                availability: .inRecordingsDirectory,
+                sourcePath: FilePath(source.path)
+            ),
+        ])
+        let viewModel = makeViewModel(client: client)
+        viewModel.outputDirectory = FilePath(tmp.path)
+        await viewModel.refreshAsync()
+
+        #expect(viewModel.rows.first?.exported == true)
+        #expect(viewModel.rows.first?.exportedPath == FilePath(target.path))
+    }
+
+    @Test
+    func cannotSelectNonExportableRowForExport() async {
         let client = MockExvmsClient(recordings: [
             .fixture(id: 1, title: "Cloud", availability: .needsDownload),
         ])
-        let viewModel = RecordingsViewModel(client: client)
+        let viewModel = makeViewModel(client: client)
 
-        viewModel.refresh()
+        await viewModel.refreshAsync()
         let row = viewModel.rows[0]
         viewModel.setExportSelection(row: row, isSelected: true)
 
@@ -124,34 +216,34 @@ struct RecordingsViewModelTests {
     }
 
     @Test
-    func permissionErrorsEnableFullDiskAccessGuidance() {
+    func permissionErrorsEnableFullDiskAccessGuidance() async {
         let client = MockExvmsClient(
             recordings: [],
             listError: ExvmsClientError.rust("permission denied reading Voice Memos data at /Users/example/Library")
         )
-        let viewModel = RecordingsViewModel(client: client)
+        let viewModel = makeViewModel(client: client)
 
-        viewModel.refresh()
+        await viewModel.refreshAsync()
 
         #expect(viewModel.needsFullDiskAccessHelp)
     }
 
     @Test
-    func sqliteOpenFailuresEnableFullDiskAccessGuidance() {
+    func sqliteOpenFailuresEnableFullDiskAccessGuidance() async {
         let client = MockExvmsClient(
             recordings: [],
             listError: ExvmsClientError.rust("SQLite error: unable to open database file: /Users/example/CloudRecordings.db")
         )
-        let viewModel = RecordingsViewModel(client: client)
+        let viewModel = makeViewModel(client: client)
 
-        viewModel.refresh()
+        await viewModel.refreshAsync()
 
         #expect(viewModel.needsFullDiskAccessHelp)
         #expect(viewModel.fullDiskAccessMessage != nil)
     }
 
     @Test
-    func localSourceFileEnablesPreview() throws {
+    func localSourceFileEnablesPreview() async throws {
         let tmp = try temporaryDirectory()
         let source = tmp.appendingPathComponent("Local.m4a")
         FileManager.default.createFile(atPath: source.path, contents: Data([1]))
@@ -164,7 +256,7 @@ struct RecordingsViewModelTests {
                 .fixture(
                     id: 1,
                     title: "Local",
-                    availability: .local,
+                    availability: .inRecordingsDirectory,
                     sourcePath: FilePath(source.path)
                 ),
                 .fixture(
@@ -175,9 +267,9 @@ struct RecordingsViewModelTests {
                 ),
             ]
         )
-        let viewModel = RecordingsViewModel(client: client)
+        let viewModel = makeViewModel(client: client)
 
-        viewModel.refresh()
+        await viewModel.refreshAsync()
 
         #expect(viewModel.rows[0].canPreview)
         #expect(!viewModel.rows[1].canPreview)
@@ -198,7 +290,15 @@ struct RecordingsViewModelTests {
     }
 }
 
-private final class MockExvmsClient: ExvmsClient {
+@MainActor
+private func makeViewModel(client: MockExvmsClient) -> RecordingsViewModel {
+    let suiteName = "RecordingsViewModelTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defaults.removePersistentDomain(forName: suiteName)
+    return RecordingsViewModel(client: client, userDefaults: defaults)
+}
+
+private final class MockExvmsClient: ExvmsClient, @unchecked Sendable {
     var exportedIDs: [Int64] = []
     private var store: VoiceMemosStore
     private var recordings: [VoiceMemoRecording]
@@ -217,7 +317,7 @@ private final class MockExvmsClient: ExvmsClient {
         self.listError = listError
     }
 
-    func listRecordings() throws -> RecordingCatalog {
+    func listRecordings() async throws -> RecordingCatalog {
         if let listError {
             throw listError
         }
@@ -227,7 +327,7 @@ private final class MockExvmsClient: ExvmsClient {
         )
     }
 
-    func exportRecordings(ids: [Int64], outputDirectory: FilePath, template: String, jobs: Int) throws -> ExportSummary {
+    func exportRecordings(ids: [Int64], outputDirectory: FilePath, template: String, jobs: Int) async throws -> ExportSummary {
         exportedIDs = ids
         return ExportSummary(succeeded: ids.count, skipped: 0, failed: 0)
     }

@@ -18,35 +18,45 @@ struct VoiceMemosStore: Equatable {
 }
 
 enum RecordingAvailability: Int32 {
-    case local = 0
+    case inRecordingsDirectory = 0
     case needsDownload = 1
     case outsideRecordingsDirectory = 2
+    case corrupted = 3
+    case checking = 4
 
     var label: String {
         switch self {
-        case .local:
-            ExVMsStrings.Availability.local
+        case .inRecordingsDirectory:
+            ExVMsStrings.Availability.inRecordingsDirectory
         case .needsDownload:
             ExVMsStrings.Availability.needsDownload
         case .outsideRecordingsDirectory:
             ExVMsStrings.Availability.outsideStorage
+        case .corrupted:
+            ExVMsStrings.Availability.corrupted
+        case .checking:
+            String(localized: "availability.checking")
         }
     }
 
     var isExportable: Bool {
-        self == .local
+        self == .inRecordingsDirectory
     }
 
     init(exvmsAvailability: ExvmsAvailability) {
         switch exvmsAvailability {
-        case .local:
-            self = .local
+        case .inRecordingsDirectory:
+            self = .inRecordingsDirectory
         case .needsDownload:
             self = .needsDownload
         case .outsideRecordingsDirectory:
             self = .outsideRecordingsDirectory
+        case .corrupted:
+            self = .corrupted
+        case .checking:
+            self = .checking
         default:
-            self = .needsDownload
+            self = .checking
         }
     }
 }
@@ -95,75 +105,79 @@ struct ExportSummary: Equatable {
     var failed: Int
 }
 
-protocol ExvmsClient {
-    func listRecordings() throws -> RecordingCatalog
-    func exportRecordings(ids: [Int64], outputDirectory: FilePath, template: String, jobs: Int) throws -> ExportSummary
+protocol ExvmsClient: Sendable {
+    func listRecordings() async throws -> RecordingCatalog
+    func exportRecordings(ids: [Int64], outputDirectory: FilePath, template: String, jobs: Int) async throws -> ExportSummary
 }
 
-final class RustExvmsClient: ExvmsClient {
-    func listRecordings() throws -> RecordingCatalog {
-        let result = exvmsListRecordings()
-        defer { exvmsFreeListResult(result) }
+struct RustExvmsClient: ExvmsClient {
+    func listRecordings() async throws -> RecordingCatalog {
+        try await Task.detached(priority: .userInitiated) {
+            let result = exvmsListRecordings()
+            defer { exvmsFreeListResult(result) }
 
-        guard result.code == .OK else {
-            throw ExvmsClientError.rust(Self.string(from: result.message) ?? ExVMsStrings.Error.Recordings.listFailed)
-        }
+            guard result.code == .OK else {
+                throw ExvmsClientError.rust(Self.string(from: result.message) ?? ExVMsStrings.Error.Recordings.listFailed)
+            }
 
-        let store = VoiceMemosStore(
-            recordingsDirectory: Self.filePath(from: result.recordings_dir) ?? FilePath(""),
-            databasePath: Self.filePath(from: result.db_path) ?? FilePath("")
-        )
-        let rows = Self.buffer(result.recordings, count: Int(result.recordings_len)).map { row in
-            let databasePath = Self.filePath(from: row.db_path) ?? FilePath("")
-            let pathKind = RecordingPathKind(exvmsPathKind: row.path_kind)
-            return VoiceMemoRecording(
-                id: row.id,
-                title: Self.string(from: row.title) ?? "",
-                recordedAt: row.recorded_at,
-                duration: row.duration,
-                localDuration: row.local_duration,
-                databasePath: databasePath,
-                sourcePath: Self.sourcePath(
-                    recordingsDirectory: store.recordingsDirectory,
-                    databasePath: databasePath,
-                    pathKind: pathKind
-                ),
-                pathKind: pathKind,
-                folderName: Self.nonEmptyString(from: row.folder_name),
-                availability: RecordingAvailability(exvmsAvailability: row.availability),
-                availabilityDetail: Self.nonEmptyString(from: row.availability_detail)
+            let store = VoiceMemosStore(
+                recordingsDirectory: Self.filePath(from: result.recordings_dir) ?? FilePath(""),
+                databasePath: Self.filePath(from: result.db_path) ?? FilePath("")
             )
-        }
-        return RecordingCatalog(store: store, recordings: rows)
-    }
-
-    func exportRecordings(ids: [Int64], outputDirectory: FilePath, template: String, jobs: Int) throws -> ExportSummary {
-        return try outputDirectory.withPlatformString { outputPointer in
-            try template.withCString { templatePointer in
-                var mutableIds = ids
-                let result = mutableIds.withUnsafeMutableBufferPointer { buffer in
-                    precondition(buffer.baseAddress != nil, "export requires at least one recording id")
-                    return exvmsExportRecordings(
-                        outputDirectory: outputPointer,
-                        ids: buffer.baseAddress!,
-                        idsCount: UInt(buffer.count),
-                        jobs: UInt(jobs),
-                        filenameTemplate: templatePointer
-                    )
-                }
-                defer { exvmsFreeExportResult(result) }
-
-                guard result.code == .OK else {
-                    throw ExvmsClientError.rust(Self.string(from: result.message) ?? ExVMsStrings.Error.Export.failed)
-                }
-
-                return ExportSummary(
-                    succeeded: Int(result.successes_len),
-                    skipped: Int(result.skipped_len),
-                    failed: Int(result.failures_len)
+            let rows = Self.buffer(result.recordings, count: Int(result.recordings_len)).map { row in
+                let databasePath = Self.filePath(from: row.db_path) ?? FilePath("")
+                let pathKind = RecordingPathKind(exvmsPathKind: row.path_kind)
+                return VoiceMemoRecording(
+                    id: row.id,
+                    title: Self.string(from: row.title) ?? "",
+                    recordedAt: row.recorded_at,
+                    duration: row.duration,
+                    localDuration: row.local_duration,
+                    databasePath: databasePath,
+                    sourcePath: Self.sourcePath(
+                        recordingsDirectory: store.recordingsDirectory,
+                        databasePath: databasePath,
+                        pathKind: pathKind
+                    ),
+                    pathKind: pathKind,
+                    folderName: Self.nonEmptyString(from: row.folder_name),
+                    availability: RecordingAvailability(exvmsAvailability: row.availability),
+                    availabilityDetail: Self.nonEmptyString(from: row.availability_detail)
                 )
             }
-        }
+            return RecordingCatalog(store: store, recordings: rows)
+        }.value
+    }
+
+    func exportRecordings(ids: [Int64], outputDirectory: FilePath, template: String, jobs: Int) async throws -> ExportSummary {
+        try await Task.detached(priority: .userInitiated) {
+            try outputDirectory.withPlatformString { outputPointer in
+                try template.withCString { templatePointer in
+                    var mutableIds = ids
+                    let result = mutableIds.withUnsafeMutableBufferPointer { buffer in
+                        precondition(buffer.baseAddress != nil, "export requires at least one recording id")
+                        return exvmsExportRecordings(
+                            outputDirectory: outputPointer,
+                            ids: buffer.baseAddress!,
+                            idsCount: UInt(buffer.count),
+                            jobs: UInt(jobs),
+                            filenameTemplate: templatePointer
+                        )
+                    }
+                    defer { exvmsFreeExportResult(result) }
+
+                    guard result.code == .OK else {
+                        throw ExvmsClientError.rust(Self.string(from: result.message) ?? ExVMsStrings.Error.Export.failed)
+                    }
+
+                    return ExportSummary(
+                        succeeded: Int(result.successes_len),
+                        skipped: Int(result.skipped_len),
+                        failed: Int(result.failures_len)
+                    )
+                }
+            }
+        }.value
     }
 
     private static func buffer<T>(_ pointer: UnsafeMutablePointer<T>?, count: Int) -> [T] {

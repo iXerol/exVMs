@@ -227,7 +227,7 @@ struct FilenameRecipe: Equatable, Codable {
             sourcePath: nil,
             pathKind: .relative,
             folderName: nil,
-            availability: .local,
+            availability: .inRecordingsDirectory,
             availabilityDetail: nil
         )
         var stem = Self.sanitizeStem(renderStem(for: sample))

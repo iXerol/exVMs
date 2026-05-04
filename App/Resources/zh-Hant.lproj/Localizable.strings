@@ -30,18 +30,18 @@
 "table.column.folder" = "資料夾";
 "table.column.recorded" = "錄製時間";
 "table.column.duration" = "時長";
+"table.column.size" = "大小";
 "table.column.availability" = "可用性";
-"table.column.target" = "目標";
 
 "status.items.count %lld" = "%lld 個項目";
 "status.export_summary %lld %lld %lld" = "已匯出 %lld，已略過 %lld，失敗 %lld";
 "status.choose_output_before_export" = "匯出前請選擇匯出目錄";
 
-"prompt.choose_output_directory" = "選擇匯出目錄";
 
-"availability.local" = "本機";
+"availability.in_recordings_directory" = "位於錄音目錄內";
 "availability.needs_download" = "需要下載";
 "availability.outside_storage" = "不在儲存目錄內";
+"availability.corrupted" = "檔案損毀";
 "availability.exported" = "已匯出";
 
 "error.recordings.list_failed" = "無法列出錄音";
@@ -63,6 +63,13 @@
 "accessibility.recordings.select_none_visible" = "清除目前可見錄音的匯出選取";
 "accessibility.recording.export %@" = "匯出 %@";
 "accessibility.recording.preview %@" = "預覽 %@";
+"accessibility.recording.preview.hint" = "使用快速查看開啟本機音訊檔。";
+"accessibility.recording.reveal_source %@" = "在 Finder 中顯示 %@ 的來源檔案";
+"accessibility.recording.reveal_source.hint" = "開啟 Finder 並選取本機語音備忘錄檔案。";
+"accessibility.recording.reveal_exported %@" = "在 Finder 中顯示 %@ 的已匯出檔案";
+"accessibility.recording.reveal_exported.hint" = "開啟 Finder 並選取相符的已匯出檔案。";
+"accessibility.progress.loading" = "正在載入錄音";
+"accessibility.progress.exporting" = "正在匯出錄音";
 "accessibility.filename.example" = "檔名範例";
 "accessibility.filename.pattern" = "檔名格式";
 "accessibility.filename.pattern.help" = "輸入檔名文字，或點選上方控制項將其插入游標位置。";
@@ -70,6 +77,15 @@
 "accessibility.filename.insert_token.hint" = "將此控制項加入檔名格式的游標位置。";
 "accessibility.filename.token %@" = "%@控制項";
 "accessibility.filename.literal %@" = "文字 %@";
+"accessibility.about.project_url" = "GitHub 上的 exVMs 專案";
 
 "help.filename.insert_token %@" = "插入%@";
 "help.recording.preview %@" = "使用快速查看預覽 %@";
+"help.recording.reveal_source %@" = "在 Finder 中顯示 %@ 的來源檔案";
+"help.recording.reveal_exported %@" = "在 Finder 中顯示 %@ 的已匯出檔案";
+
+"about.menu.title" = "關於 exVMs";
+"about.window.title" = "關於 exVMs";
+"about.project_url" = "https://github.com/iXerol/exVMs";
+
+"availability.checking" = "檢查中…";
