@@ -6,6 +6,7 @@ let rustBuildScript = """
 
 let displayName = "exVMs"
 let version = "1.0.0"
+let buildNumber = "260428"
 let utilityCategory = "public.app-category.utilities"
 
 let project = Project(
@@ -28,8 +29,8 @@ let project = Project(
                 "CFBundleDisplayName": .string(displayName),
                 "CFBundleDevelopmentRegion": "en",
                 "CFBundleLocalizations": ["en", "zh-Hans", "zh-Hant", "ja"],
-                "CFBundleShortVersionString": .string(version),
-                "CFBundleVersion": .string(version),
+                "CFBundleShortVersionString": "$(MARKETING_VERSION)",
+                "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
                 "LSApplicationCategoryType": .string(utilityCategory),
                 "NSQuitAlwaysKeepsWindows": false,
             ]),
@@ -44,6 +45,7 @@ let project = Project(
                 "INFOPLIST_KEY_CFBundleDisplayName": .string(displayName),
                 "INFOPLIST_KEY_LSApplicationCategoryType": .string(utilityCategory),
                 "MARKETING_VERSION": .string(version),
+                "CURRENT_PROJECT_VERSION": .string(buildNumber),
                 "DEVELOPMENT_TEAM": "52892NMS89",
                 "ENABLE_HARDENED_RUNTIME": "YES",
                 "ENABLE_APP_SANDBOX": "NO",
@@ -60,7 +62,6 @@ let project = Project(
                     .release(name: "Release", settings: [
                         "CODE_SIGN_STYLE": "Manual",
                         "CODE_SIGN_IDENTITY": "Developer ID Application",
-                        "PROVISIONING_PROFILE_SPECIFIER": "exVMs Distribution",
                     ]),
                 ]
             )

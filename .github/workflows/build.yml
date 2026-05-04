@@ -83,6 +83,9 @@ jobs:
         with:
           targets: x86_64-apple-darwin,aarch64-apple-darwin
 
+      - name: Install Tuist
+        run: brew install tuist
+
       - name: Build release CLI (arm64)
         run: cargo build --release --bin exvms --features cli --target aarch64-apple-darwin
 
@@ -100,14 +103,102 @@ jobs:
             dist/exvms-macos-x86_64
           chmod +x dist/exvms-macos-arm64 dist/exvms-macos-x86_64 dist/exvms-macos-universal
 
-      - name: Upload CLI artifact
+      - name: Import Developer ID certificate
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ github.run_id }}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          printf '%s' "$MACOS_CERT_P12_BASE64" | base64 -D > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+      - name: Generate Xcode project
+        run: tuist generate --no-open
+
+      - name: Archive macOS app
+        env:
+          EXVMS_BUILD_UNIVERSAL: "1"
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          xcodebuild \
+            -workspace exVMs.xcworkspace \
+            -scheme exVMsApp \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$PWD/build/exVMs.xcarchive" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            DEVELOPMENT_TEAM=52892NMS89 \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            OTHER_CODE_SIGN_FLAGS="--timestamp" \
+            archive
+
+      - name: Export macOS app
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>destination</key>
+            <string>export</string>
+            <key>method</key>
+            <string>developer-id</string>
+            <key>signingCertificate</key>
+            <string>Developer ID Application</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>52892NMS89</string>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$PWD/build/exVMs.xcarchive" \
+            -exportPath "$PWD/build/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Notarize macOS app
+        env:
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          APP_ZIP="$PWD/dist/exVMs-macOS-app.zip"
+
+          printf '%s' "$APP_STORE_CONNECT_API_KEY" > "$API_KEY_PATH"
+          /usr/bin/ditto -c -k --keepParent "$PWD/build/export/exVMs.app" "$APP_ZIP"
+          xcrun notarytool submit "$APP_ZIP" \
+            --key "$API_KEY_PATH" \
+            --key-id "$APP_STORE_CONNECT_API_KEY_ID" \
+            --issuer "$APP_STORE_CONNECT_API_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "$PWD/build/export/exVMs.app"
+          /usr/bin/ditto -c -k --keepParent "$PWD/build/export/exVMs.app" "$APP_ZIP"
+          codesign --verify --deep --strict --verbose=2 "$PWD/build/export/exVMs.app"
+          spctl --assess --type execute --verbose=4 "$PWD/build/export/exVMs.app"
+
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: exvms-macos-binaries
+          name: exvms-macos-release
           path: |
             dist/exvms-macos-arm64
             dist/exvms-macos-x86_64
             dist/exvms-macos-universal
+            dist/exVMs-macOS-app.zip
           if-no-files-found: error
 
       - name: Publish GitHub release assets
@@ -121,4 +212,5 @@ jobs:
             dist/exvms-macos-arm64 \
             dist/exvms-macos-x86_64 \
             dist/exvms-macos-universal \
+            dist/exVMs-macOS-app.zip \
             --clobber
