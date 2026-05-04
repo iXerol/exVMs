@@ -175,11 +175,11 @@ struct ContentView: View {
             TableColumn("table.column.duration", value: \.duration) { row in
                 Text(formatDuration(row.duration))
             }
-            .width(ideal: 60, max: 100)
+            .width(ideal: 50, max: 100)
             TableColumn("table.column.size", value: \.sizeSortValue) { row in
                 Text(row.sizeLabel)
             }
-            .width(ideal: 45, max: 80)
+            .width(ideal: 50, max: 80)
             TableColumn("table.column.availability", value: \.availabilityLabel) { row in
                 HStack(spacing: 6) {
                     Text(row.availabilityLabel)
