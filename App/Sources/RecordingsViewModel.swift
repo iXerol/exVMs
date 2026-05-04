@@ -35,6 +35,8 @@ struct RecordingRow: Identifiable, Hashable {
 @MainActor
 @Observable
 final class RecordingsViewModel {
+    typealias AvailabilityResolver = @Sendable (VoiceMemoRecording) -> (RecordingAvailability, String?)
+
     static let outputDirectoryDefaultsKey = "com.ixerol.exvms.output-directory"
     static let filenameRecipeDefaultsKey = "com.ixerol.exvms.filename-recipe"
 
@@ -72,6 +74,8 @@ final class RecordingsViewModel {
     @ObservationIgnored
     private let client: ExvmsClient
     @ObservationIgnored
+    private let availabilityResolver: AvailabilityResolver
+    @ObservationIgnored
     private let userDefaults: UserDefaults
     @ObservationIgnored
     private let outputMonitor = DirectoryMonitor()
@@ -83,9 +87,16 @@ final class RecordingsViewModel {
     private var recordings: [VoiceMemoRecording] = []
     @ObservationIgnored
     private var rowBuildGeneration: Int = 0
+    @ObservationIgnored
+    private var availabilityGeneration: Int = 0
 
-    init(client: ExvmsClient, userDefaults: UserDefaults = .standard) {
+    init(
+        client: ExvmsClient,
+        userDefaults: UserDefaults = .standard,
+        availabilityResolver: @escaping AvailabilityResolver = RecordingsViewModel.resolveAvailability(recording:)
+    ) {
         self.client = client
+        self.availabilityResolver = availabilityResolver
         self.userDefaults = userDefaults
         self.outputDirectory = Self.loadPersistedOutputDirectory(from: userDefaults)
         self.filenameRecipe = Self.loadPersistedFilenameRecipe(from: userDefaults) ?? .default
@@ -162,9 +173,11 @@ final class RecordingsViewModel {
             let catalog = try await client.listRecordings()
             store = catalog.store
             recordings = catalog.recordings
+            availabilityGeneration += 1
+            let availabilityGeneration = availabilityGeneration
             await rebuildRowsAsync()
             isLoading = false
-            await resolveAvailabilityProgressively()
+            await resolveAvailabilityProgressively(generation: availabilityGeneration)
         } catch {
             errorMessage = error.localizedDescription
             if needsFullDiskAccessHelp {
@@ -255,7 +268,7 @@ final class RecordingsViewModel {
                 jobs: 4
             )
             selectedIDs.removeAll()
-            await refreshAsync()
+            await rebuildRowsAsync()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -306,28 +319,62 @@ final class RecordingsViewModel {
         }
     }
 
-    private func resolveAvailabilityProgressively() async {
-        let generation = rowBuildGeneration
+    private func resolveAvailabilityProgressively(generation: Int) async {
         let snapshot = rows
+        let availabilityResolver = availabilityResolver
         await withTaskGroup(of: (Int64, RecordingAvailability, String?).self) { group in
             for row in snapshot where row.recording.availability == .checking {
                 let recording = row.recording
                 group.addTask(priority: .utility) {
-                    let result = Self.resolveAvailability(recording: recording)
+                    let result = availabilityResolver(recording)
                     return (recording.id, result.0, result.1)
                 }
             }
 
             for await (id, availability, detail) in group {
-                guard generation == rowBuildGeneration else { return }
-                guard let rowIndex = rows.firstIndex(where: { $0.id == id }) else { continue }
-                rows[rowIndex].recording.availability = availability
-                rows[rowIndex].recording.availabilityDetail = detail
-                if !rows[rowIndex].canExport {
+                guard generation == availabilityGeneration else { continue }
+                updateRecordingAvailability(id: id, availability: availability, detail: detail)
+                let rowGeneration = rowBuildGeneration
+                if let rowIndex = rows.firstIndex(where: { $0.id == id }) {
+                    rows[rowIndex].recording.availability = availability
+                    rows[rowIndex].recording.availabilityDetail = detail
+                }
+                await rebuildRow(id: id, generation: rowGeneration)
+                if let row = rows.first(where: { $0.id == id }), !row.canExport {
                     selectedIDs.remove(id)
                 }
             }
         }
+    }
+
+    private func updateRecordingAvailability(id: Int64, availability: RecordingAvailability, detail: String?) {
+        guard let recordingIndex = recordings.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        recordings[recordingIndex].availability = availability
+        recordings[recordingIndex].availabilityDetail = detail
+    }
+
+    private func rebuildRow(id: Int64, generation: Int) async {
+        guard let recording = recordings.first(where: { $0.id == id }) else {
+            return
+        }
+        let snapshotOutput = outputDirectory
+        let snapshotRecipe = filenameRecipe
+        let snapshotHashCache = hashCache
+        let rebuiltRow = await Task.detached(priority: .userInitiated) {
+            Self.buildRow(
+                recording: recording,
+                outputDirectory: snapshotOutput,
+                filenameRecipe: snapshotRecipe,
+                hashCache: snapshotHashCache
+            )
+        }.value
+        guard generation == rowBuildGeneration,
+              let rowIndex = rows.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        rows[rowIndex] = rebuiltRow
     }
 
     nonisolated private static func buildRows(
@@ -339,19 +386,11 @@ final class RecordingsViewModel {
         return await withTaskGroup(of: (Int, RecordingRow).self) { group in
             for (index, recording) in recordings.enumerated() {
                 group.addTask(priority: .userInitiated) {
-                    let sourceSize = sourceFileSize(path: recording.sourcePath)
-                    let exportedPath = exportedPath(
+                    let row = buildRow(
                         recording: recording,
                         outputDirectory: outputDirectory,
                         filenameRecipe: filenameRecipe,
-                        sourceSize: sourceSize,
                         hashCache: hashCache
-                    )
-                    let row = RecordingRow(
-                        recording: recording,
-                        exported: exportedPath != nil,
-                        exportedPath: exportedPath,
-                        sourceFileSizeBytes: sourceSize
                     )
                     return (index, row)
                 }
@@ -363,6 +402,28 @@ final class RecordingsViewModel {
             }
             return ordered.compactMap { $0 }
         }
+    }
+
+    nonisolated private static func buildRow(
+        recording: VoiceMemoRecording,
+        outputDirectory: FilePath?,
+        filenameRecipe: FilenameRecipe,
+        hashCache: FileHashCache
+    ) -> RecordingRow {
+        let sourceSize = sourceFileSize(path: recording.sourcePath)
+        let exportedPath = exportedPath(
+            recording: recording,
+            outputDirectory: outputDirectory,
+            filenameRecipe: filenameRecipe,
+            sourceSize: sourceSize,
+            hashCache: hashCache
+        )
+        return RecordingRow(
+            recording: recording,
+            exported: exportedPath != nil,
+            exportedPath: exportedPath,
+            sourceFileSizeBytes: sourceSize
+        )
     }
 
     nonisolated private static func appendingNumericSuffix(_ path: FilePath, suffix: Int) -> FilePath {

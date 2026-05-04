@@ -78,6 +78,35 @@ struct RecordingsViewModelTests {
     }
 
     @Test
+    func exportedStateRefreshesAfterAvailabilityResolves() async throws {
+        let tmp = try temporaryDirectory()
+        let source = tmp.appendingPathComponent("Deferred-source.m4a")
+        let payload = Data("deferred-exported-audio".utf8)
+        FileManager.default.createFile(atPath: source.path, contents: payload)
+        let target = tmp.appendingPathComponent("Deferred.m4a")
+        FileManager.default.createFile(atPath: target.path, contents: payload)
+
+        let client = MockExvmsClient(recordings: [
+            .fixture(
+                id: 1,
+                title: "Deferred",
+                availability: .checking,
+                sourcePath: FilePath(source.path)
+            ),
+        ])
+        let viewModel = makeViewModel(client: client) { _ in
+            (.inRecordingsDirectory, nil)
+        }
+        viewModel.outputDirectory = FilePath(tmp.path)
+
+        await viewModel.refreshAsync()
+
+        #expect(viewModel.rows.first?.recording.availability == .inRecordingsDirectory)
+        #expect(viewModel.rows.first?.exported == true)
+        #expect(viewModel.rows.first?.exportedPath == FilePath(target.path))
+    }
+
+    @Test
     func successfulExportRefreshesAndClearsSelection() async {
         let client = MockExvmsClient(recordings: [
             .fixture(id: 1, title: "Local", availability: .inRecordingsDirectory),
@@ -92,6 +121,28 @@ struct RecordingsViewModelTests {
         #expect(viewModel.selectedIDs.isEmpty)
         #expect(viewModel.lastExportSummary == ExportSummary(succeeded: 1, skipped: 0, failed: 0))
         #expect(client.exportedIDs == [1])
+        #expect(client.listRecordingsCallCount == 1)
+    }
+
+    @Test
+    func outputDirectoryChangeDoesNotResetResolvedAvailability() async throws {
+        let firstOutput = try temporaryDirectory()
+        let secondOutput = try temporaryDirectory()
+        let client = MockExvmsClient(recordings: [
+            .fixture(id: 1, title: "Pending", availability: .checking),
+        ])
+        let viewModel = makeViewModel(client: client)
+
+        await viewModel.refreshAsync()
+        #expect(viewModel.rows.first?.recording.availability == .needsDownload)
+
+        viewModel.outputDirectory = FilePath(firstOutput.path)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(viewModel.rows.first?.recording.availability == .needsDownload)
+
+        viewModel.outputDirectory = FilePath(secondOutput.path)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(viewModel.rows.first?.recording.availability == .needsDownload)
     }
 
     @Test
@@ -291,15 +342,26 @@ struct RecordingsViewModelTests {
 }
 
 @MainActor
-private func makeViewModel(client: MockExvmsClient) -> RecordingsViewModel {
+private func makeViewModel(
+    client: MockExvmsClient,
+    availabilityResolver: RecordingsViewModel.AvailabilityResolver? = nil
+) -> RecordingsViewModel {
     let suiteName = "RecordingsViewModelTests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
-    return RecordingsViewModel(client: client, userDefaults: defaults)
+    guard let availabilityResolver else {
+        return RecordingsViewModel(client: client, userDefaults: defaults)
+    }
+    return RecordingsViewModel(
+        client: client,
+        userDefaults: defaults,
+        availabilityResolver: availabilityResolver
+    )
 }
 
 private final class MockExvmsClient: ExvmsClient, @unchecked Sendable {
     var exportedIDs: [Int64] = []
+    var listRecordingsCallCount = 0
     private var store: VoiceMemosStore
     private var recordings: [VoiceMemoRecording]
     private var listError: Error?
@@ -318,6 +380,7 @@ private final class MockExvmsClient: ExvmsClient, @unchecked Sendable {
     }
 
     func listRecordings() async throws -> RecordingCatalog {
+        listRecordingsCallCount += 1
         if let listError {
             throw listError
         }
