@@ -60,6 +60,7 @@ let project = Project(
                     .release(name: "Release", settings: [
                         "CODE_SIGN_STYLE": "Manual",
                         "CODE_SIGN_IDENTITY": "Developer ID Application",
+                        "PROVISIONING_PROFILE_SPECIFIER": "exVMs Distribution",
                     ]),
                 ]
             )
@@ -72,7 +73,12 @@ let project = Project(
             deploymentTargets: .macOS("14.0"),
             infoPlist: .default,
             sources: ["App/Tests/**"],
-            dependencies: [.target(name: "exVMsApp")]
+            dependencies: [.target(name: "exVMsApp")],
+            settings: .settings(base: [
+                "CODE_SIGN_STYLE": "Automatic",
+                "CODE_SIGN_IDENTITY": "Apple Development",
+                "DEVELOPMENT_TEAM": "52892NMS89",
+            ])
         ),
     ]
 )
