@@ -11,7 +11,6 @@ pub fn set_export_timestamps(path: &Path, timestamp: SystemTime) -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
 pub fn audio_duration_seconds(path: &Path) -> Result<f64> {
     let output = std::process::Command::new("/usr/bin/afinfo")
         .arg(path)
@@ -47,14 +46,6 @@ pub fn audio_duration_seconds(path: &Path) -> Result<f64> {
     ))
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn audio_duration_seconds(_path: &Path) -> Result<f64> {
-    Err(crate::ExvmsError::Macos(
-        "audio duration check is only supported on macOS".to_string(),
-    ))
-}
-
-#[cfg(target_os = "macos")]
 fn set_creation_time(path: &Path, timestamp: SystemTime) -> Result<()> {
     use std::ffi::CString;
     use std::mem;
@@ -88,9 +79,4 @@ fn set_creation_time(path: &Path, timestamp: SystemTime) -> Result<()> {
     } else {
         Err(std::io::Error::last_os_error().into())
     }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn set_creation_time(_path: &Path, _timestamp: SystemTime) -> Result<()> {
-    Ok(())
 }

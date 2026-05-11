@@ -1,3 +1,6 @@
+#[cfg(not(target_os = "macos"))]
+compile_error!("exVMs currently supports macOS only.");
+
 pub mod catalog;
 pub mod db;
 pub mod export;
