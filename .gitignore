@@ -3,3 +3,4 @@
 /Derived
 /*.xcodeproj
 /*.xcworkspace
+.DS_Store
