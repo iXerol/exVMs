@@ -880,6 +880,34 @@ mod tests {
     }
 
     #[test]
+    fn default_template_increments_numeric_suffix_for_repeated_batch_collisions() {
+        let tmp = tempfile::tempdir().unwrap();
+        for name in ["one.wav", "two.wav", "three.wav"] {
+            create_valid_wav(&tmp.path().join(name));
+        }
+        let rows = vec![
+            recording(1, "Title", "one.wav", None),
+            recording(2, "Title", "two.wav", None),
+            recording(3, "Title", "three.wav", None),
+        ];
+        let (planned, _) = plan_exports(
+            tmp.path(),
+            &tmp.path().join("out"),
+            &rows,
+            None,
+            SelectionMode::All,
+        )
+        .unwrap();
+        assert_eq!(
+            planned
+                .iter()
+                .map(|row| row.target.file_name().unwrap().to_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["Title.wav", "Title 2.wav", "Title 3.wav"]
+        );
+    }
+
+    #[test]
     fn existing_target_gets_macos_numeric_suffix() {
         let tmp = tempfile::tempdir().unwrap();
         create_valid_wav(&tmp.path().join("one.wav"));
@@ -895,6 +923,34 @@ mod tests {
         )
         .unwrap();
         assert_eq!(planned[0].target, tmp.path().join("out").join("One 2.wav"));
+    }
+
+    #[test]
+    fn existing_targets_increment_numeric_suffix_until_available() {
+        let tmp = tempfile::tempdir().unwrap();
+        create_valid_wav(&tmp.path().join("one.wav"));
+        fs::create_dir(tmp.path().join("out")).unwrap();
+        for suffix in 1..10 {
+            let name = if suffix == 1 {
+                "Title.wav".to_string()
+            } else {
+                format!("Title {suffix}.wav")
+            };
+            fs::File::create(tmp.path().join("out").join(name)).unwrap();
+        }
+        let rows = vec![recording(1, "Title", "one.wav", None)];
+        let (planned, _) = plan_exports(
+            tmp.path(),
+            &tmp.path().join("out"),
+            &rows,
+            None,
+            SelectionMode::All,
+        )
+        .unwrap();
+        assert_eq!(
+            planned[0].target,
+            tmp.path().join("out").join("Title 10.wav")
+        );
     }
 
     #[test]
