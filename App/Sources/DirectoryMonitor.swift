@@ -1,8 +1,10 @@
 import Foundation
 
+@MainActor
 final class DirectoryMonitor {
     private var descriptor: CInt = -1
     private var source: DispatchSourceFileSystemObject?
+    private var debounceTask: Task<Void, Never>?
 
     func start(url: URL, onChange: @escaping @Sendable () -> Void) {
         stop()
@@ -16,7 +18,9 @@ final class DirectoryMonitor {
             eventMask: [.write, .delete, .rename, .attrib, .extend],
             queue: DispatchQueue.main
         )
-        source.setEventHandler(handler: onChange)
+        source.setEventHandler { [weak self] in
+            self?.scheduleChange(onChange)
+        }
         source.setCancelHandler { [descriptor] in
             close(descriptor)
         }
@@ -25,12 +29,26 @@ final class DirectoryMonitor {
     }
 
     func stop() {
+        debounceTask?.cancel()
+        debounceTask = nil
         source?.cancel()
         source = nil
         descriptor = -1
     }
 
-    deinit {
-        stop()
+    private func scheduleChange(_ onChange: @escaping @Sendable () -> Void) {
+        debounceTask?.cancel()
+        debounceTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else {
+                return
+            }
+            self?.debounceTask = nil
+            onChange()
+        }
     }
 }
