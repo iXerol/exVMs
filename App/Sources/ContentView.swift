@@ -197,6 +197,9 @@ struct ContentView: View {
                         .accessibilityHint("accessibility.recording.reveal_exported.hint")
                     }
                 }
+                .task(id: row.id) {
+                    viewModel.requestInspections(for: row.id, orderedIDs: sortedRows.map(\.id))
+                }
             }
         }
     }

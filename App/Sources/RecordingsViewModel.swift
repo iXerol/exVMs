@@ -1,3 +1,4 @@
+import AVFoundation
 import Observation
 import CryptoKit
 import System
@@ -32,10 +33,58 @@ struct RecordingRow: Identifiable, Hashable {
     var sizeSortValue: Int64 { sourceFileSizeBytes ?? -1 }
 }
 
+private struct ExportInspection: Sendable {
+    var exportedPath: FilePath?
+
+    var exported: Bool {
+        exportedPath != nil
+    }
+}
+
+private struct AvailabilityQueueState {
+    var generation = 0
+    var pendingIDs: [Int64] = []
+    var pendingIDSet = Set<Int64>()
+    var tasks: [Int64: Task<Void, Never>] = [:]
+
+    mutating func cancelAll() {
+        generation += 1
+        for task in tasks.values {
+            task.cancel()
+        }
+        tasks.removeAll()
+        pendingIDs.removeAll()
+        pendingIDSet.removeAll()
+    }
+}
+
+private struct ExportInspectionQueueState {
+    var generation = 0
+    var pendingIDs: [Int64] = []
+    var pendingIDSet = Set<Int64>()
+    var tasks: [Int64: Task<Void, Never>] = [:]
+    var results: [Int64: ExportInspection] = [:]
+
+    mutating func cancelAllAndClearResults() {
+        generation += 1
+        for task in tasks.values {
+            task.cancel()
+        }
+        tasks.removeAll()
+        pendingIDs.removeAll()
+        pendingIDSet.removeAll()
+        results.removeAll()
+    }
+}
+
 @MainActor
 @Observable
 final class RecordingsViewModel {
-    typealias AvailabilityResolver = @Sendable (VoiceMemoRecording) -> (RecordingAvailability, String?)
+    typealias AvailabilityResolver = @Sendable (VoiceMemoRecording) async -> (RecordingAvailability, String?)
+
+    private static let availabilityConcurrencyLimit = 4
+    private static let exportInspectionConcurrencyLimit = 2
+    private static let prefetchCount = 16
 
     static let outputDirectoryDefaultsKey = "com.ixerol.exvms.output-directory"
     static let filenameRecipeDefaultsKey = "com.ixerol.exvms.filename-recipe"
@@ -55,6 +104,7 @@ final class RecordingsViewModel {
     var outputDirectory: FilePath? {
         didSet {
             configureOutputMonitor()
+            invalidateExportInspections()
             rebuildRows()
         }
     }
@@ -62,6 +112,7 @@ final class RecordingsViewModel {
     var filenameRecipe = FilenameRecipe.default {
         didSet {
             persistFilenameRecipe()
+            invalidateExportInspections()
             rebuildRows()
         }
     }
@@ -86,9 +137,9 @@ final class RecordingsViewModel {
     @ObservationIgnored
     private var recordings: [VoiceMemoRecording] = []
     @ObservationIgnored
-    private var rowBuildGeneration: Int = 0
+    private var availabilityQueue = AvailabilityQueueState()
     @ObservationIgnored
-    private var availabilityGeneration: Int = 0
+    private var exportInspectionQueue = ExportInspectionQueueState()
 
     init(
         client: ExvmsClient,
@@ -173,11 +224,11 @@ final class RecordingsViewModel {
             let catalog = try await client.listRecordings()
             store = catalog.store
             recordings = catalog.recordings
-            availabilityGeneration += 1
-            let availabilityGeneration = availabilityGeneration
+            cancelAvailabilityChecks()
+            invalidateExportInspections()
             await rebuildRowsAsync()
             isLoading = false
-            await resolveAvailabilityProgressively(generation: availabilityGeneration)
+            requestInitialInspections()
         } catch {
             errorMessage = error.localizedDescription
             if needsFullDiskAccessHelp {
@@ -268,7 +319,12 @@ final class RecordingsViewModel {
                 jobs: 4
             )
             selectedIDs.removeAll()
+            invalidateExportInspections()
             await rebuildRowsAsync()
+            let orderedIDs = rows.map(\.id)
+            for id in ids {
+                requestInspections(for: id, orderedIDs: orderedIDs)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -283,9 +339,15 @@ final class RecordingsViewModel {
         userDefaults.set(outputDirectory.string, forKey: Self.outputDirectoryDefaultsKey)
         outputMonitor.start(url: outputDirectory.fileURL(isDirectory: true)) { [weak self] in
             Task { @MainActor in
-                await self?.rebuildRowsAsync()
+                self?.handleOutputDirectoryChange()
             }
         }
+    }
+
+    private func handleOutputDirectoryChange() {
+        invalidateExportInspections()
+        rebuildRows()
+        requestInitialInspections()
     }
 
     private func rebuildRows() {
@@ -295,56 +357,158 @@ final class RecordingsViewModel {
     }
 
     private func rebuildRowsAsync() async {
-        rowBuildGeneration += 1
-        let generation = rowBuildGeneration
-        let snapshotRecordings = recordings
-        let snapshotOutput = outputDirectory
-        let snapshotRecipe = filenameRecipe
-        let snapshotHashCache = hashCache
-        let builtRows = await Task.detached(priority: .userInitiated) {
-            await Self.buildRows(
-                recordings: snapshotRecordings,
-                outputDirectory: snapshotOutput,
-                filenameRecipe: snapshotRecipe,
-                hashCache: snapshotHashCache
-            )
-        }.value
-        guard generation == rowBuildGeneration else {
-            return
-        }
-        rows = builtRows
+        rows = Self.buildRows(
+            recordings: recordings,
+            exportInspections: exportInspectionQueue.results
+        )
         selectedIDs = selectedIDs.intersection(Set(rows.filter(\.canExport).map(\.id)))
         if let folderFilter, !folderOptions.contains(folderFilter) {
             self.folderFilter = nil
         }
+        requestInitialInspections()
     }
 
-    private func resolveAvailabilityProgressively(generation: Int) async {
-        let snapshot = rows
-        let availabilityResolver = availabilityResolver
-        await withTaskGroup(of: (Int64, RecordingAvailability, String?).self) { group in
-            for row in snapshot where row.recording.availability == .checking {
-                let recording = row.recording
-                group.addTask(priority: .utility) {
-                    let result = availabilityResolver(recording)
-                    return (recording.id, result.0, result.1)
-                }
-            }
+    func requestInspections(for visibleID: Int64, orderedIDs: [Int64]) {
+        guard let visibleIndex = orderedIDs.firstIndex(of: visibleID) else {
+            return
+        }
+        let requestedIDs = orderedIDs[visibleIndex...].prefix(Self.prefetchCount)
+        for id in requestedIDs {
+            enqueueAvailabilityCheck(id: id)
+            enqueueExportInspection(id: id)
+        }
+        startAvailabilityChecks()
+        startExportInspections()
+    }
 
-            for await (id, availability, detail) in group {
-                guard generation == availabilityGeneration else { continue }
-                updateRecordingAvailability(id: id, availability: availability, detail: detail)
-                let rowGeneration = rowBuildGeneration
-                if let rowIndex = rows.firstIndex(where: { $0.id == id }) {
-                    rows[rowIndex].recording.availability = availability
-                    rows[rowIndex].recording.availabilityDetail = detail
+    private func requestInitialInspections() {
+        guard let firstID = rows.first?.id else {
+            return
+        }
+        requestInspections(for: firstID, orderedIDs: rows.map(\.id))
+    }
+
+    private func cancelAvailabilityChecks() {
+        availabilityQueue.cancelAll()
+    }
+
+    private func enqueueAvailabilityCheck(id: Int64) {
+        guard let recording = recordings.first(where: { $0.id == id }),
+              recording.availability == .checking,
+              availabilityQueue.tasks[id] == nil,
+              availabilityQueue.pendingIDSet.insert(id).inserted else {
+            return
+        }
+        availabilityQueue.pendingIDs.append(id)
+    }
+
+    private func startAvailabilityChecks() {
+        while availabilityQueue.tasks.count < Self.availabilityConcurrencyLimit,
+              let id = availabilityQueue.pendingIDs.first {
+            availabilityQueue.pendingIDs.removeFirst()
+            availabilityQueue.pendingIDSet.remove(id)
+            guard let recording = recordings.first(where: { $0.id == id }),
+                  recording.availability == .checking else {
+                continue
+            }
+            let generation = availabilityQueue.generation
+            let resolver = availabilityResolver
+            availabilityQueue.tasks[id] = Task.detached(priority: .utility) { [weak self] in
+                let result = await resolver(recording)
+                guard !Task.isCancelled else {
+                    return
                 }
-                await rebuildRow(id: id, generation: rowGeneration)
-                if let row = rows.first(where: { $0.id == id }), !row.canExport {
-                    selectedIDs.remove(id)
-                }
+                await self?.completeAvailabilityCheck(
+                    id: id,
+                    result: result,
+                    generation: generation
+                )
             }
         }
+    }
+
+    private func completeAvailabilityCheck(
+        id: Int64,
+        result: (RecordingAvailability, String?),
+        generation: Int
+    ) {
+        availabilityQueue.tasks.removeValue(forKey: id)
+        guard generation == availabilityQueue.generation else {
+            return
+        }
+        updateRecordingAvailability(id: id, availability: result.0, detail: result.1)
+        if let rowIndex = rows.firstIndex(where: { $0.id == id }) {
+            rows[rowIndex].recording.availability = result.0
+            rows[rowIndex].recording.availabilityDetail = result.1
+        }
+        if let row = rows.first(where: { $0.id == id }), !row.canExport {
+            selectedIDs.remove(id)
+        }
+        enqueueExportInspection(id: id)
+        startAvailabilityChecks()
+        startExportInspections()
+    }
+
+    private func invalidateExportInspections() {
+        exportInspectionQueue.cancelAllAndClearResults()
+    }
+
+    private func enqueueExportInspection(id: Int64) {
+        guard outputDirectory != nil,
+              recordings.contains(where: { $0.id == id && $0.availability.isExportable }),
+              exportInspectionQueue.results[id] == nil,
+              exportInspectionQueue.tasks[id] == nil,
+              exportInspectionQueue.pendingIDSet.insert(id).inserted else {
+            return
+        }
+        exportInspectionQueue.pendingIDs.append(id)
+    }
+
+    private func startExportInspections() {
+        while exportInspectionQueue.tasks.count < Self.exportInspectionConcurrencyLimit,
+              let id = exportInspectionQueue.pendingIDs.first {
+            exportInspectionQueue.pendingIDs.removeFirst()
+            exportInspectionQueue.pendingIDSet.remove(id)
+            guard let recording = recordings.first(where: { $0.id == id }),
+                  let outputDirectory else {
+                continue
+            }
+            let generation = exportInspectionQueue.generation
+            let recipe = filenameRecipe
+            let cache = hashCache
+            exportInspectionQueue.tasks[id] = Task.detached(priority: .utility) { [weak self] in
+                let inspection = Self.inspectExport(
+                    recording: recording,
+                    outputDirectory: outputDirectory,
+                    filenameRecipe: recipe,
+                    hashCache: cache
+                )
+                guard !Task.isCancelled else {
+                    return
+                }
+                await self?.completeExportInspection(
+                    id: id,
+                    inspection: inspection,
+                    generation: generation
+                )
+            }
+        }
+    }
+
+    private func completeExportInspection(id: Int64, inspection: ExportInspection, generation: Int) {
+        exportInspectionQueue.tasks.removeValue(forKey: id)
+        guard generation == exportInspectionQueue.generation else {
+            return
+        }
+        exportInspectionQueue.results[id] = inspection
+        if let rowIndex = rows.firstIndex(where: { $0.id == id }) {
+            rows[rowIndex].exported = inspection.exported
+            rows[rowIndex].exportedPath = inspection.exportedPath
+            if inspection.exported {
+                selectedIDs.remove(id)
+            }
+        }
+        startExportInspections()
     }
 
     private func updateRecordingAvailability(id: Int64, availability: RecordingAvailability, detail: String?) {
@@ -355,74 +519,41 @@ final class RecordingsViewModel {
         recordings[recordingIndex].availabilityDetail = detail
     }
 
-    private func rebuildRow(id: Int64, generation: Int) async {
-        guard let recording = recordings.first(where: { $0.id == id }) else {
-            return
-        }
-        let snapshotOutput = outputDirectory
-        let snapshotRecipe = filenameRecipe
-        let snapshotHashCache = hashCache
-        let rebuiltRow = await Task.detached(priority: .userInitiated) {
-            Self.buildRow(
-                recording: recording,
-                outputDirectory: snapshotOutput,
-                filenameRecipe: snapshotRecipe,
-                hashCache: snapshotHashCache
-            )
-        }.value
-        guard generation == rowBuildGeneration,
-              let rowIndex = rows.firstIndex(where: { $0.id == id }) else {
-            return
-        }
-        rows[rowIndex] = rebuiltRow
-    }
-
     nonisolated private static func buildRows(
         recordings: [VoiceMemoRecording],
-        outputDirectory: FilePath?,
-        filenameRecipe: FilenameRecipe,
-        hashCache: FileHashCache
-    ) async -> [RecordingRow] {
-        return await withTaskGroup(of: (Int, RecordingRow).self) { group in
-            for (index, recording) in recordings.enumerated() {
-                group.addTask(priority: .userInitiated) {
-                    let row = buildRow(
-                        recording: recording,
-                        outputDirectory: outputDirectory,
-                        filenameRecipe: filenameRecipe,
-                        hashCache: hashCache
-                    )
-                    return (index, row)
-                }
-            }
-
-            var ordered = Array<RecordingRow?>(repeating: nil, count: recordings.count)
-            for await (index, row) in group {
-                ordered[index] = row
-            }
-            return ordered.compactMap { $0 }
-        }
+        exportInspections: [Int64: ExportInspection]
+    ) -> [RecordingRow] {
+        recordings.map { buildRow(recording: $0, exportInspection: exportInspections[$0.id]) }
     }
 
     nonisolated private static func buildRow(
         recording: VoiceMemoRecording,
-        outputDirectory: FilePath?,
-        filenameRecipe: FilenameRecipe,
-        hashCache: FileHashCache
+        exportInspection: ExportInspection?
     ) -> RecordingRow {
         let sourceSize = sourceFileSize(path: recording.sourcePath)
-        let exportedPath = exportedPath(
-            recording: recording,
-            outputDirectory: outputDirectory,
-            filenameRecipe: filenameRecipe,
-            sourceSize: sourceSize,
-            hashCache: hashCache
-        )
         return RecordingRow(
             recording: recording,
-            exported: exportedPath != nil,
-            exportedPath: exportedPath,
+            exported: exportInspection?.exported ?? false,
+            exportedPath: exportInspection?.exportedPath,
             sourceFileSizeBytes: sourceSize
+        )
+    }
+
+    nonisolated private static func inspectExport(
+        recording: VoiceMemoRecording,
+        outputDirectory: FilePath,
+        filenameRecipe: FilenameRecipe,
+        hashCache: FileHashCache
+    ) -> ExportInspection {
+        let sourceSize = sourceFileSize(path: recording.sourcePath)
+        return ExportInspection(
+            exportedPath: exportedPath(
+                recording: recording,
+                outputDirectory: outputDirectory,
+                filenameRecipe: filenameRecipe,
+                sourceSize: sourceSize,
+                hashCache: hashCache
+            )
         )
     }
 
@@ -621,6 +752,9 @@ final class RecordingsViewModel {
         defer { buffer.deallocate() }
 
         while stream.hasBytesAvailable {
+            if Task.isCancelled {
+                return nil
+            }
             let count = stream.read(buffer, maxLength: chunkSize)
             if count < 0 {
                 return nil
@@ -635,7 +769,7 @@ final class RecordingsViewModel {
         return digest
     }
 
-    nonisolated private static func resolveAvailability(recording: VoiceMemoRecording) -> (RecordingAvailability, String?) {
+    nonisolated private static func resolveAvailability(recording: VoiceMemoRecording) async -> (RecordingAvailability, String?) {
         guard recording.pathKind != .missing else {
             return (.needsDownload, "database path is empty; open/download it in Voice Memos.app first")
         }
@@ -657,8 +791,18 @@ final class RecordingsViewModel {
             return (.needsDownload, "local audio file is missing; open/download it in Voice Memos.app first")
         }
 
-        guard let duration = afinfoDurationSeconds(path: sourcePath) else {
-            return (.corrupted, "failed to read audio container duration")
+        let duration: Double
+        do {
+            duration = try await assetDurationSeconds(path: sourcePath)
+        } catch let failure {
+            switch failure {
+            case .timedOut:
+                return (.corrupted, "timed out while reading audio container duration")
+            case .cancelled:
+                return (.checking, nil)
+            case .invalidDuration, .loadingFailed:
+                return (.corrupted, "failed to read audio container duration")
+            }
         }
         let tolerance = 5.0
         if abs(duration - recording.localDuration) > tolerance {
@@ -670,37 +814,61 @@ final class RecordingsViewModel {
         return (.inRecordingsDirectory, nil)
     }
 
-    nonisolated private static func afinfoDurationSeconds(path: FilePath) -> Double? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/afinfo")
-        process.arguments = [path.string]
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        process.standardError = Pipe()
+    nonisolated private static func assetDurationSeconds(
+        path: FilePath
+    ) async throws(AssetDurationError) -> Double {
+        let asset = AVURLAsset(
+            url: path.fileURL(),
+            options: [AVURLAssetPreferPreciseDurationAndTimingKey: true]
+        )
         do {
-            try process.run()
-            process.waitUntilExit()
+            return try await withTaskCancellationHandler(operation: {
+                try await withThrowingTaskGroup(of: Double.self) { group in
+                    group.addTask {
+                        do {
+                            let duration = try await asset.load(.duration)
+                            let seconds = duration.seconds
+                            guard seconds.isFinite, seconds > 0 else {
+                                throw AssetDurationError.invalidDuration
+                            }
+                            return seconds
+                        } catch is CancellationError {
+                            throw AssetDurationError.cancelled
+                        } catch let error as AssetDurationError {
+                            throw error
+                        } catch {
+                            throw AssetDurationError.loadingFailed
+                        }
+                    }
+                    group.addTask {
+                        do {
+                            try await Task.sleep(for: .seconds(15))
+                        } catch is CancellationError {
+                            throw AssetDurationError.cancelled
+                        } catch {
+                            throw AssetDurationError.loadingFailed
+                        }
+                        throw AssetDurationError.timedOut
+                    }
+                    defer {
+                        group.cancelAll()
+                        asset.cancelLoading()
+                    }
+                    guard let duration = try await group.next() else {
+                        throw AssetDurationError.loadingFailed
+                    }
+                    return duration
+                }
+            }, onCancel: {
+                asset.cancelLoading()
+            })
+        } catch let error as AssetDurationError {
+            throw error
+        } catch is CancellationError {
+            throw .cancelled
         } catch {
-            return nil
+            throw .loadingFailed
         }
-        guard process.terminationStatus == 0 else {
-            return nil
-        }
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        for line in output.split(separator: "\n") {
-            let text = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard text.hasPrefix("estimated duration:") else { continue }
-            let raw = text.replacingOccurrences(of: "estimated duration:", with: "")
-                .replacingOccurrences(of: "sec", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if let value = Double(raw), value.isFinite, value > 0 {
-                return value
-            }
-        }
-        return nil
     }
 
 }
@@ -709,6 +877,13 @@ private extension String {
     var nilIfEmpty: String? {
         isEmpty ? nil : self
     }
+}
+
+private enum AssetDurationError: Error, Sendable {
+    case timedOut
+    case cancelled
+    case invalidDuration
+    case loadingFailed
 }
 
 private struct FileHashIdentity: Hashable {

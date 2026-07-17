@@ -46,6 +46,7 @@ struct RecordingsViewModelTests {
         let viewModel = makeViewModel(client: client)
         viewModel.outputDirectory = FilePath(tmp.path)
         await viewModel.refreshAsync()
+        #expect(await waitUntil { viewModel.rows.first?.exported == true })
         viewModel.selectedIDs = [1]
 
         #expect(!viewModel.canExportSelection)
@@ -100,6 +101,10 @@ struct RecordingsViewModelTests {
         viewModel.outputDirectory = FilePath(tmp.path)
 
         await viewModel.refreshAsync()
+        #expect(await waitUntil {
+            viewModel.rows.first?.recording.availability == .inRecordingsDirectory
+                && viewModel.rows.first?.exported == true
+        })
 
         #expect(viewModel.rows.first?.recording.availability == .inRecordingsDirectory)
         #expect(viewModel.rows.first?.exported == true)
@@ -134,6 +139,7 @@ struct RecordingsViewModelTests {
         let viewModel = makeViewModel(client: client)
 
         await viewModel.refreshAsync()
+        #expect(await waitUntil { viewModel.rows.first?.recording.availability == .needsDownload })
         #expect(viewModel.rows.first?.recording.availability == .needsDownload)
 
         viewModel.outputDirectory = FilePath(firstOutput.path)
@@ -143,6 +149,28 @@ struct RecordingsViewModelTests {
         viewModel.outputDirectory = FilePath(secondOutput.path)
         try await Task.sleep(for: .milliseconds(50))
         #expect(viewModel.rows.first?.recording.availability == .needsDownload)
+    }
+
+    @Test
+    func initialAvailabilityInspectionOnlyPrefetchesFirstRows() async {
+        let recorder = AvailabilityCallRecorder()
+        let recordings = (1...20).map {
+            VoiceMemoRecording.fixture(
+                id: Int64($0),
+                title: "Pending \($0)",
+                availability: .checking
+            )
+        }
+        let client = MockExvmsClient(recordings: recordings)
+        let viewModel = makeViewModel(client: client) { recording in
+            await recorder.resolve(recording.id)
+        }
+
+        await viewModel.refreshAsync()
+
+        #expect(await waitUntilAsync { await recorder.inspectedIDs().count == 16 })
+        #expect(await recorder.inspectedIDs() == Set((1...16).map(Int64.init)))
+        #expect(await recorder.maximumConcurrentChecks() <= 4)
     }
 
     @Test
@@ -247,6 +275,7 @@ struct RecordingsViewModelTests {
         let viewModel = makeViewModel(client: client)
         viewModel.outputDirectory = FilePath(tmp.path)
         await viewModel.refreshAsync()
+        #expect(await waitUntil { viewModel.rows.first?.exported == true })
 
         #expect(viewModel.rows.first?.exported == true)
         #expect(viewModel.rows.first?.exportedPath == FilePath(target.path))
@@ -357,6 +386,54 @@ private func makeViewModel(
         userDefaults: defaults,
         availabilityResolver: availabilityResolver
     )
+}
+
+@MainActor
+private func waitUntil(
+    timeout: Duration = .seconds(1),
+    condition: @escaping @MainActor () -> Bool
+) async -> Bool {
+    let clock = ContinuousClock()
+    let deadline = clock.now + timeout
+    while !condition() && clock.now < deadline {
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return condition()
+}
+
+private func waitUntilAsync(
+    timeout: Duration = .seconds(1),
+    condition: @escaping @Sendable () async -> Bool
+) async -> Bool {
+    let clock = ContinuousClock()
+    let deadline = clock.now + timeout
+    while !(await condition()) && clock.now < deadline {
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return await condition()
+}
+
+private actor AvailabilityCallRecorder {
+    private var ids = Set<Int64>()
+    private var activeChecks = 0
+    private var maximumActiveChecks = 0
+
+    func resolve(_ id: Int64) async -> (RecordingAvailability, String?) {
+        ids.insert(id)
+        activeChecks += 1
+        maximumActiveChecks = max(maximumActiveChecks, activeChecks)
+        try? await Task.sleep(for: .milliseconds(10))
+        activeChecks -= 1
+        return (.needsDownload, nil)
+    }
+
+    func inspectedIDs() -> Set<Int64> {
+        ids
+    }
+
+    func maximumConcurrentChecks() -> Int {
+        maximumActiveChecks
+    }
 }
 
 private final class MockExvmsClient: ExvmsClient, @unchecked Sendable {
