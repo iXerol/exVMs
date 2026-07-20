@@ -5,8 +5,8 @@ let rustBuildScript = """
 """
 
 let displayName = "exVMs"
-let version = "1.2.0"
-let buildNumber = "26071801"
+let version = "1.3.0"
+let buildNumber = "26072001"
 let utilityCategory = "public.app-category.utilities"
 
 let project = Project(
