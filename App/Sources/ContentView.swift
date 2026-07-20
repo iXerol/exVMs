@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var viewModel: RecordingsViewModel
     @State private var sortOrder = [KeyPathComparator(\RecordingRow.recordedDate, order: .reverse)]
+    @AppStorage(RecordingsViewModel.showDeletedDefaultsKey) private var showDeleted = false
 
     init(viewModel: RecordingsViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -26,6 +27,9 @@ struct ContentView: View {
         }
         .task {
             viewModel.checkAccessAndRefresh()
+        }
+        .onChange(of: showDeleted) { _, isEnabled in
+            viewModel.showDeleted = isEnabled
         }
     }
 
@@ -164,20 +168,26 @@ struct ContentView: View {
             TableColumn("table.column.title", value: \.title) { row in
                 Text(row.title)
                     .lineLimit(1)
+                    .strikethrough(row.recording.isDeleted)
+                    .opacity(row.recording.isDeleted ? 0.5 : 1)
             }
             TableColumn("table.column.folder", value: \.folderDisplayName) { row in
                 Text(row.folderDisplayName)
                     .lineLimit(1)
+                    .opacity(row.recording.isDeleted ? 0.5 : 1)
             }
             TableColumn("table.column.recorded", value: \.recordedDate) { row in
                 Text(row.recordedDate, format: .dateTime.year().month().day().hour().minute())
+                    .opacity(row.recording.isDeleted ? 0.5 : 1)
             }
             TableColumn("table.column.duration", value: \.duration) { row in
                 Text(formatDuration(row.duration))
+                    .opacity(row.recording.isDeleted ? 0.5 : 1)
             }
             .width(ideal: 50, max: 100)
             TableColumn("table.column.size", value: \.sizeSortValue) { row in
                 Text(row.sizeLabel)
+                    .opacity(row.recording.isDeleted ? 0.5 : 1)
             }
             .width(ideal: 50, max: 80)
             TableColumn("table.column.availability", value: \.availabilityLabel) { row in
@@ -197,6 +207,7 @@ struct ContentView: View {
                         .accessibilityHint("accessibility.recording.reveal_exported.hint")
                     }
                 }
+                .opacity(row.recording.isDeleted ? 0.5 : 1)
                 .task(id: row.id) {
                     viewModel.requestInspections(for: row.id, orderedIDs: sortedRows.map(\.id))
                 }

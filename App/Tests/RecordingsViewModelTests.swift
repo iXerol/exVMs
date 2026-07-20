@@ -256,6 +256,44 @@ struct RecordingsViewModelTests {
     }
 
     @Test
+    func deletedRecordingsAreHiddenUntilEnabled() async {
+        let client = MockExvmsClient(recordings: [
+            .fixture(id: 1, title: "Available", availability: .inRecordingsDirectory),
+            .fixture(
+                id: 2,
+                title: "Deleted",
+                availability: .inRecordingsDirectory,
+                isDeleted: true
+            ),
+        ])
+        let viewModel = makeViewModel(client: client)
+
+        await viewModel.refreshAsync()
+        #expect(viewModel.rows.map(\.id) == [1])
+
+        viewModel.showDeleted = true
+        #expect(await waitUntil { viewModel.rows.map(\.id) == [1, 2] })
+        #expect(viewModel.rows.map(\.id) == [1, 2])
+        #expect(viewModel.rows.last?.recording.isDeleted == true)
+    }
+
+    @Test
+    func deletedPreferencePersists() throws {
+        let defaults = try temporaryUserDefaults()
+        let firstViewModel = RecordingsViewModel(
+            client: MockExvmsClient(recordings: []),
+            userDefaults: defaults
+        )
+        firstViewModel.showDeleted = true
+
+        let restoredViewModel = RecordingsViewModel(
+            client: MockExvmsClient(recordings: []),
+            userDefaults: defaults
+        )
+        #expect(restoredViewModel.showDeleted)
+    }
+
+    @Test
     func exportedStateChecksMacOSSuffixCandidates() async throws {
         let tmp = try temporaryDirectory()
         let source = tmp.appendingPathComponent("A_B-source.m4a")
@@ -479,6 +517,7 @@ private extension VoiceMemoRecording {
         title: String,
         availability: RecordingAvailability,
         folderName: String? = nil,
+        isDeleted: Bool = false,
         sourcePath: FilePath? = nil
     ) -> VoiceMemoRecording {
         VoiceMemoRecording(
@@ -487,6 +526,7 @@ private extension VoiceMemoRecording {
             recordedAt: 1,
             duration: 2,
             localDuration: availability.isExportable ? 2 : 0,
+            isDeleted: isDeleted,
             databasePath: FilePath("\(title).m4a"),
             sourcePath: sourcePath,
             pathKind: .relative,

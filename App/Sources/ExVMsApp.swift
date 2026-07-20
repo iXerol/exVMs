@@ -12,11 +12,28 @@ struct ExVMsApp: App {
             AppCommands()
         }
 
+        Settings {
+            PreferencesView()
+        }
+
         Window("about.window.title", id: "about") {
             AboutView()
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
+    }
+}
+
+private struct PreferencesView: View {
+    @AppStorage(RecordingsViewModel.showDeletedDefaultsKey) private var showDeleted = false
+
+    var body: some View {
+        Form {
+            Toggle("preferences.show_deleted", isOn: $showDeleted)
+        }
+        .formStyle(.grouped)
+        .frame(width: 320, height: 100)
+        .padding()
     }
 }
 

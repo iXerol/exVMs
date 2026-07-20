@@ -147,6 +147,7 @@ mod tests {
             duration: 1.0,
             local_duration: 1.0,
             eviction_date: None,
+            is_deleted: false,
             db_path: format!("{id}.m4a"),
             path_kind: RecordingPathKind::Relative,
             store_kind: RecordingStoreKind::CloudRecordings,

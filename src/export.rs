@@ -627,6 +627,7 @@ mod tests {
             duration: 1.0,
             local_duration: 1.0,
             eviction_date: None,
+            is_deleted: false,
             db_path: rel.to_string(),
             path_kind,
             store_kind: RecordingStoreKind::CloudRecordings,

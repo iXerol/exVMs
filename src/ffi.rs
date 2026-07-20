@@ -31,6 +31,7 @@ pub struct ExvmsRecording {
     pub recorded_at: f64,
     pub duration: f64,
     pub local_duration: f64,
+    pub is_deleted: i32,
     pub db_path: *mut c_char,
     pub folder_name: *mut c_char,
     pub store_kind: i32,
@@ -111,6 +112,7 @@ pub extern "C" fn exvms_list_recordings() -> ExvmsListResult {
                 recorded_at: row.recorded_at,
                 duration: row.duration,
                 local_duration: row.local_duration,
+                is_deleted: i32::from(row.is_deleted),
                 db_path: string_to_c_string(row.db_path),
                 folder_name: optional_string_to_c_string(row.folder_name),
                 store_kind: match row.store_kind {

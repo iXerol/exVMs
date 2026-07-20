@@ -71,6 +71,8 @@ Basic flow:
 
 The Export button stays disabled until an output directory exists and at least one exportable, not-yet-exported recording is selected.
 
+Deleted recordings are hidden by default. Enable **Show deleted recordings** in the app's Preferences to include them in the table; they use a dimmed style and a struck-through title.
+
 The filename editor is a single mixed text field. Type literal text directly, and click the title/date/time chips to insert them at the current cursor position. The example below the field previews the resulting filename.
 
 The app is localized in English, Simplified Chinese, Traditional Chinese, and Japanese.

@@ -58,6 +58,7 @@ pub struct Recording {
     pub duration: f64,
     pub local_duration: f64,
     pub eviction_date: Option<f64>,
+    pub is_deleted: bool,
     pub db_path: String,
     pub path_kind: RecordingPathKind,
     pub store_kind: RecordingStoreKind,
@@ -241,13 +242,15 @@ fn load_cloud_recordings(conn: &Connection, kind: DatabaseKind) -> Result<Vec<Re
             duration
         };
 
+        let eviction_date: Option<f64> = row.get(8)?;
         Ok(Recording {
             id,
             title: title_from_fields(id, encrypted_title, custom_label, unique_id, &raw_path),
             recorded_at: row.get(5)?,
             duration: effective_duration,
             local_duration,
-            eviction_date: row.get(8)?,
+            eviction_date,
+            is_deleted: is_deleted(eviction_date),
             db_path: raw_path.clone(),
             path_kind: classify_path_kind(&raw_path),
             store_kind,
@@ -294,6 +297,7 @@ fn load_legacy_local_recordings(conn: &Connection) -> Result<Vec<Recording>> {
             duration,
             local_duration: if duration > 0.0 { duration } else { 0.0 },
             eviction_date: None,
+            is_deleted: false,
             db_path: raw_path.clone(),
             path_kind: classify_path_kind(&raw_path),
             store_kind: RecordingStoreKind::LocalRecordings,
@@ -312,6 +316,11 @@ fn optional_column_expr(columns: &HashSet<String>, column: &str) -> String {
     } else {
         "NULL".to_string()
     }
+}
+
+// Voice Memos persists the scheduled eviction time for recordings marked deleted.
+fn is_deleted(eviction_date: Option<f64>) -> bool {
+    eviction_date.is_some()
 }
 
 fn title_from_fields(
@@ -376,11 +385,27 @@ mod tests {
         let rows = load_recordings_from_connection(&conn).unwrap();
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[0].id, 3);
-        assert_eq!(rows[0].local_duration, 0.0);
+        assert_eq!(rows[0].local_duration, 63.0);
         assert_eq!(rows[0].store_kind, RecordingStoreKind::CloudRecordings);
         assert_eq!(rows[1].duration, 62.0);
         assert_eq!(rows[1].folder_name.as_deref(), Some("Projects"));
         assert_eq!(rows[2].title, "One");
+        assert!(rows[0].is_deleted);
+        assert!(!rows[1].is_deleted);
+    }
+
+    #[test]
+    fn eviction_date_marks_recording_as_deleted_without_local_audio() {
+        let conn = modern_fixture_db();
+        conn.execute(
+            "UPDATE ZCLOUDRECORDING SET ZEVICTIONDATE = 100.0, ZLOCALDURATION = 0.0 WHERE Z_PK = 1",
+            [],
+        )
+        .unwrap();
+
+        let rows = load_recordings_from_connection(&conn).unwrap();
+        let recording = rows.iter().find(|recording| recording.id == 1).unwrap();
+        assert!(recording.is_deleted);
     }
 
     #[test]
@@ -505,11 +530,11 @@ mod tests {
             );
             INSERT INTO ZFOLDER (Z_PK, ZENCRYPTEDNAME) VALUES (10, 'Projects');
             INSERT INTO ZCLOUDRECORDING
-                (Z_PK, ZFOLDER, ZDATE, ZDURATION, ZLOCALDURATION, ZENCRYPTEDTITLE, ZPATH)
+                (Z_PK, ZFOLDER, ZDATE, ZDURATION, ZEVICTIONDATE, ZLOCALDURATION, ZENCRYPTEDTITLE, ZPATH)
             VALUES
-                (1, NULL, 10.0, 61.0, 61.0, 'One', 'one.m4a'),
-                (2, 10, 20.0, 999.0, 62.0, 'Two', 'two.m4a'),
-                (3, NULL, 30.0, 63.0, 0.0, 'Three', 'three.m4a');
+                (1, NULL, 10.0, 61.0, NULL, 61.0, 'One', 'one.m4a'),
+                (2, 10, 20.0, 999.0, NULL, 62.0, 'Two', 'two.m4a'),
+                (3, NULL, 30.0, 63.0, 90.0, 63.0, 'Three', 'three.m4a');
             "#,
         )
         .unwrap();

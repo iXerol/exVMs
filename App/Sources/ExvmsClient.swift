@@ -86,6 +86,7 @@ struct VoiceMemoRecording: Identifiable, Hashable {
     var recordedAt: TimeInterval
     var duration: TimeInterval
     var localDuration: TimeInterval
+    var isDeleted: Bool
     var databasePath: FilePath
     var sourcePath: FilePath?
     var pathKind: RecordingPathKind
@@ -133,6 +134,7 @@ struct RustExvmsClient: ExvmsClient {
                     recordedAt: row.recorded_at,
                     duration: row.duration,
                     localDuration: row.local_duration,
+                    isDeleted: row.is_deleted != 0,
                     databasePath: databasePath,
                     sourcePath: Self.sourcePath(
                         recordingsDirectory: store.recordingsDirectory,

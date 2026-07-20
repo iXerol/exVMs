@@ -9,6 +9,7 @@
 "ui.full_disk_access.title" = "需要完整磁碟取用權限";
 "ui.full_disk_access.message" = "exVMs 需要權限讀取本機語音備忘錄資料庫。請在「系統設定」>「隱私權與安全性」>「完整磁碟取用權限」中加入 exVMs，然後重新整理。";
 "ui.full_disk_access.status_hint" = "授予 exVMs 完整磁碟取用權限，然後重新整理。";
+"preferences.show_deleted" = "顯示已刪除的錄音";
 
 "action.show_in_finder" = "在 Finder 中顯示";
 "action.refresh" = "重新整理";

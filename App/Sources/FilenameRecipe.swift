@@ -223,6 +223,7 @@ struct FilenameRecipe: Equatable, Codable {
             recordedAt: now.timeIntervalSince1970 - 978_307_200,
             duration: 12,
             localDuration: 12,
+            isDeleted: false,
             databasePath: FilePath("recording.m4a"),
             sourcePath: nil,
             pathKind: .relative,

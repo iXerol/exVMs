@@ -88,6 +88,7 @@ final class RecordingsViewModel {
 
     static let outputDirectoryDefaultsKey = "com.ixerol.exvms.output-directory"
     static let filenameRecipeDefaultsKey = "com.ixerol.exvms.filename-recipe"
+    static let showDeletedDefaultsKey = "com.ixerol.exvms.show-deleted"
 
     private(set) var store: VoiceMemosStore?
     private(set) var rows: [RecordingRow] = []
@@ -113,6 +114,12 @@ final class RecordingsViewModel {
         didSet {
             persistFilenameRecipe()
             invalidateExportInspections()
+            rebuildRows()
+        }
+    }
+    var showDeleted = false {
+        didSet {
+            userDefaults.set(showDeleted, forKey: Self.showDeletedDefaultsKey)
             rebuildRows()
         }
     }
@@ -151,6 +158,7 @@ final class RecordingsViewModel {
         self.userDefaults = userDefaults
         self.outputDirectory = Self.loadPersistedOutputDirectory(from: userDefaults)
         self.filenameRecipe = Self.loadPersistedFilenameRecipe(from: userDefaults) ?? .default
+        self.showDeleted = userDefaults.bool(forKey: Self.showDeletedDefaultsKey)
         configureOutputMonitor()
     }
 
@@ -357,8 +365,13 @@ final class RecordingsViewModel {
     }
 
     private func rebuildRowsAsync() async {
+        let displayedRecordings = if showDeleted {
+            recordings
+        } else {
+            recordings.filter { !$0.isDeleted }
+        }
         rows = Self.buildRows(
-            recordings: recordings,
+            recordings: displayedRecordings,
             exportInspections: exportInspectionQueue.results
         )
         selectedIDs = selectedIDs.intersection(Set(rows.filter(\.canExport).map(\.id)))

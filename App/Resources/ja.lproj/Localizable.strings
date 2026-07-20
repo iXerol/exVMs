@@ -9,6 +9,7 @@
 "ui.full_disk_access.title" = "フルディスクアクセスが必要です";
 "ui.full_disk_access.message" = "exVMs がローカルのボイスメモデータベースを読み取るには権限が必要です。「システム設定」>「プライバシーとセキュリティ」>「フルディスクアクセス」に exVMs を追加してから更新してください。";
 "ui.full_disk_access.status_hint" = "exVMs にフルディスクアクセスを許可してから更新してください。";
+"preferences.show_deleted" = "削除済みの録音を表示";
 
 "action.show_in_finder" = "Finderで表示";
 "action.refresh" = "更新";

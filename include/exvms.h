@@ -49,6 +49,7 @@ typedef struct ExvmsRecording {
     double recorded_at;
     double duration;
     double local_duration;
+    int32_t is_deleted;
     char *_Nullable db_path;
     char *_Nullable folder_name;
     ExvmsStoreKind store_kind;

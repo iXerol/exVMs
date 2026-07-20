@@ -9,6 +9,7 @@
 "ui.full_disk_access.title" = "Full Disk Access Required";
 "ui.full_disk_access.message" = "exVMs needs permission to read the local Voice Memos database. Add exVMs in System Settings > Privacy & Security > Full Disk Access, then refresh.";
 "ui.full_disk_access.status_hint" = "Grant Full Disk Access to exVMs, then refresh.";
+"preferences.show_deleted" = "Show deleted recordings";
 
 "action.show_in_finder" = "Show in Finder";
 "action.refresh" = "Refresh";
