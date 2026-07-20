@@ -128,13 +128,14 @@ jobs:
           EXVMS_BUILD_UNIVERSAL: "1"
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          MARKETING_VERSION="${VERSION%%-*}"
           xcodebuild \
             -workspace exVMs.xcworkspace \
             -scheme exVMsApp \
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -archivePath "$PWD/build/exVMs.xcarchive" \
-            MARKETING_VERSION="$VERSION" \
+            MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             DEVELOPMENT_TEAM=52892NMS89 \
             CODE_SIGN_STYLE=Manual \
@@ -206,7 +207,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes ""
+            if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+              gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes "" --prerelease
+            else
+              gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes ""
+            fi
           fi
           gh release upload "${GITHUB_REF_NAME}" \
             dist/exvms-macos-arm64 \
