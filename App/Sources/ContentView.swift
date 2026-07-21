@@ -100,13 +100,26 @@ struct ContentView: View {
 
     private var tableControls: some View {
         HStack(spacing: 8) {
-            Picker("ui.filter.folder.label", selection: folderFilterBinding) {
+            Picker("ui.filter.label", selection: folderFilterBinding) {
                 Text("filter.folder.all").tag(Optional<String>.none)
                 ForEach(viewModel.folderOptions, id: \.self) { folder in
                     Text(folder).tag(Optional(folder))
                 }
             }
             .frame(width: 240)
+            Text("ui.export.grouping.label")
+                .foregroundStyle(.secondary)
+            Menu {
+                ForEach(ExvmsExportGrouping.selectableCases) { grouping in
+                    Toggle(isOn: exportGroupingBinding(for: grouping)) {
+                        Text(LocalizedStringKey(grouping.localizationKey))
+                    }
+                }
+            } label: {
+                Text(LocalizedStringKey(viewModel.exportGrouping.localizationKey))
+                    .frame(width: 200, alignment: .leading)
+            }
+            .frame(width: 220)
             Button {
                 selectAllVisibleExportableRows()
             } label: {
@@ -235,6 +248,24 @@ struct ContentView: View {
         Binding(
             get: { viewModel.folderFilter },
             set: { viewModel.folderFilter = $0 }
+        )
+    }
+
+    private func exportGroupingBinding(for grouping: ExvmsExportGrouping) -> Binding<Bool> {
+        Binding(
+            get: { viewModel.exportGrouping.contains(grouping) },
+            set: { isEnabled in
+                var next = viewModel.exportGrouping
+                if isEnabled {
+                    next.insert(grouping)
+                } else {
+                    next.remove(grouping)
+                }
+                guard !next.isEmpty else {
+                    return
+                }
+                viewModel.exportGrouping = next
+            }
         )
     }
 

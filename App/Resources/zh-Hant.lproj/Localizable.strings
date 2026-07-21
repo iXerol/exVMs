@@ -5,7 +5,8 @@
 "ui.toolbar.output_directory %@" = "匯出目錄：%@";
 "ui.filename.section_title" = "匯出檔名";
 "ui.filename.example.label" = "範例";
-"ui.filter.folder.label" = "資料夾";
+"ui.filter.label" = "篩選";
+"ui.export.grouping.label" = "分組方式";
 "ui.full_disk_access.title" = "需要完整磁碟取用權限";
 "ui.full_disk_access.message" = "exVMs 需要權限讀取本機語音備忘錄資料庫。請在「系統設定」>「隱私權與安全性」>「完整磁碟取用權限」中加入 exVMs，然後重新整理。";
 "ui.full_disk_access.status_hint" = "授予 exVMs 完整磁碟取用權限，然後重新整理。";
@@ -24,6 +25,9 @@
 
 "filter.folder.all" = "所有資料夾";
 "folder.none" = "無資料夾";
+"export.folder.date" = "日期";
+"export.folder.voice_memos_folder" = "Voice Memos資料夾";
+"export.folder.voice_memos_folder_and_date" = "Voice Memos資料夾 + 日期";
 
 "table.column.export" = "匯出";
 "table.column.preview" = "預覽";

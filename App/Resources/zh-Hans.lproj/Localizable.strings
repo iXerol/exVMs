@@ -5,7 +5,8 @@
 "ui.toolbar.output_directory %@" = "导出目录：%@";
 "ui.filename.section_title" = "导出文件名";
 "ui.filename.example.label" = "示例";
-"ui.filter.folder.label" = "文件夹";
+"ui.filter.label" = "筛选";
+"ui.export.grouping.label" = "分组方式";
 "ui.full_disk_access.title" = "需要完全磁盘访问权限";
 "ui.full_disk_access.message" = "exVMs 需要权限读取本地语音备忘录数据库。请在“系统设置”>“隐私与安全性”>“完全磁盘访问权限”中添加 exVMs，然后刷新。";
 "ui.full_disk_access.status_hint" = "授予 exVMs 完全磁盘访问权限，然后刷新。";
@@ -24,6 +25,9 @@
 
 "filter.folder.all" = "所有文件夹";
 "folder.none" = "无文件夹";
+"export.folder.date" = "日期";
+"export.folder.voice_memos_folder" = "Voice Memos文件夹";
+"export.folder.voice_memos_folder_and_date" = "Voice Memos文件夹 + 日期";
 
 "table.column.export" = "导出";
 "table.column.preview" = "预览";

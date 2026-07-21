@@ -5,7 +5,8 @@
 "ui.toolbar.output_directory %@" = "Output Directory: %@";
 "ui.filename.section_title" = "Exported Filename";
 "ui.filename.example.label" = "Example";
-"ui.filter.folder.label" = "Folder";
+"ui.filter.label" = "Filter";
+"ui.export.grouping.label" = "Group by";
 "ui.full_disk_access.title" = "Full Disk Access Required";
 "ui.full_disk_access.message" = "exVMs needs permission to read the local Voice Memos database. Add exVMs in System Settings > Privacy & Security > Full Disk Access, then refresh.";
 "ui.full_disk_access.status_hint" = "Grant Full Disk Access to exVMs, then refresh.";
@@ -24,6 +25,9 @@
 
 "filter.folder.all" = "All Folders";
 "folder.none" = "No Folder";
+"export.folder.date" = "Date";
+"export.folder.voice_memos_folder" = "Voice Memos Folder";
+"export.folder.voice_memos_folder_and_date" = "Voice Memos Folder + Date";
 
 "table.column.export" = "Export";
 "table.column.preview" = "Preview";

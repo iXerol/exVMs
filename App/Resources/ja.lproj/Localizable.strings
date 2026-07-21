@@ -5,7 +5,8 @@
 "ui.toolbar.output_directory %@" = "書き出し先: %@";
 "ui.filename.section_title" = "書き出しファイル名";
 "ui.filename.example.label" = "例";
-"ui.filter.folder.label" = "フォルダ";
+"ui.filter.label" = "フィルタ";
+"ui.export.grouping.label" = "グループ化";
 "ui.full_disk_access.title" = "フルディスクアクセスが必要です";
 "ui.full_disk_access.message" = "exVMs がローカルのボイスメモデータベースを読み取るには権限が必要です。「システム設定」>「プライバシーとセキュリティ」>「フルディスクアクセス」に exVMs を追加してから更新してください。";
 "ui.full_disk_access.status_hint" = "exVMs にフルディスクアクセスを許可してから更新してください。";
@@ -24,6 +25,9 @@
 
 "filter.folder.all" = "すべてのフォルダ";
 "folder.none" = "フォルダなし";
+"export.folder.date" = "日付";
+"export.folder.voice_memos_folder" = "ボイスメモフォルダ";
+"export.folder.voice_memos_folder_and_date" = "ボイスメモフォルダ + 日付";
 
 "table.column.export" = "書き出し";
 "table.column.preview" = "プレビュー";
