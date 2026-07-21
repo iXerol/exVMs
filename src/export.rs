@@ -13,11 +13,48 @@ use crate::sanitize;
 use crate::template::FilenameTemplate;
 use crate::time;
 use crate::{ExvmsError, Result};
+use chrono::Datelike;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectionMode {
     ExplicitIds,
     All,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExportGrouping(u32);
+
+impl ExportGrouping {
+    pub const FOLDER: Self = Self(1 << 0);
+    pub const DATE: Self = Self(1 << 1);
+
+    pub fn from_bits(bits: u32) -> Result<Self> {
+        if bits & !(Self::FOLDER.0 | Self::DATE.0) == 0 {
+            Ok(Self(bits))
+        } else {
+            Err(ExvmsError::InvalidArguments(format!(
+                "invalid export folder option bits: {bits}"
+            )))
+        }
+    }
+
+    pub fn bits(self) -> u32 {
+        self.0
+    }
+
+    pub fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+impl Default for ExportGrouping {
+    fn default() -> Self {
+        Self::FOLDER
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,6 +119,26 @@ pub fn plan_exports_with_template(
     mode: SelectionMode,
     template: &FilenameTemplate,
 ) -> Result<(Vec<PlannedExport>, Vec<SkippedRecording>)> {
+    plan_exports_with_template_and_grouping(
+        recordings_dir,
+        output_dir,
+        recordings,
+        requested_ids,
+        mode,
+        template,
+        ExportGrouping::default(),
+    )
+}
+
+pub fn plan_exports_with_template_and_grouping(
+    recordings_dir: &Path,
+    output_dir: &Path,
+    recordings: &[Recording],
+    requested_ids: Option<&[i64]>,
+    mode: SelectionMode,
+    template: &FilenameTemplate,
+    grouping: ExportGrouping,
+) -> Result<(Vec<PlannedExport>, Vec<SkippedRecording>)> {
     let selected = select_recordings(recordings, requested_ids)?;
     let mut planned = Vec::new();
     let mut skipped = Vec::new();
@@ -95,6 +152,7 @@ pub fn plan_exports_with_template(
                     output_dir,
                     recording,
                     template,
+                    grouping,
                 )?);
             }
             Availability::NeedsDownload(reason) => {
@@ -314,26 +372,31 @@ fn plan_single(
     output_dir: &Path,
     recording: &Recording,
     template: &FilenameTemplate,
+    grouping: ExportGrouping,
 ) -> Result<PlannedExport> {
     let source = resolve_source(recordings_dir, recording)?;
+    let recorded_at = time::apple_local_fixed_offset_datetime(recording.recorded_at);
     let mut target_dir = output_dir.to_path_buf();
-    if let Some(folder_name) = recording
-        .folder_name
-        .as_deref()
-        .filter(|value| !value.is_empty())
-    {
-        target_dir.push(sanitize::filename(folder_name));
+    if grouping.contains(ExportGrouping::FOLDER) {
+        if let Some(folder_name) = recording
+            .folder_name
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            target_dir.push(sanitize::filename(folder_name));
+        } else if grouping.contains(ExportGrouping::DATE) {
+            target_dir.push("No Folder");
+        }
+    }
+    if grouping.contains(ExportGrouping::DATE) {
+        target_dir.push(date_directory_name(recorded_at));
     }
 
     let source_extension = source
         .extension()
         .and_then(|value| value.to_str())
         .filter(|value| !value.is_empty());
-    let rendered = template.render_stem(
-        recording.id,
-        &recording.title,
-        time::apple_local_fixed_offset_datetime(recording.recorded_at),
-    );
+    let rendered = template.render_stem(recording.id, &recording.title, recorded_at);
     let filename = finalize_filename(&rendered, source_extension);
 
     Ok(PlannedExport {
@@ -343,6 +406,15 @@ fn plan_single(
         target: target_dir.join(filename),
         recorded_at: recording.recorded_at,
     })
+}
+
+fn date_directory_name(recorded_at: chrono::DateTime<chrono::FixedOffset>) -> String {
+    format!(
+        "{}-{}-{}",
+        recorded_at.year(),
+        recorded_at.month(),
+        recorded_at.day()
+    )
 }
 
 fn finalize_filename(stem: &str, source_extension: Option<&str>) -> String {
@@ -970,6 +1042,69 @@ mod tests {
         assert_eq!(
             planned[0].target,
             tmp.path().join("out").join("Folder_Name").join("One.wav")
+        );
+    }
+
+    #[test]
+    fn plans_date_output_when_date_grouping_is_selected() {
+        let tmp = tempfile::tempdir().unwrap();
+        create_valid_wav(&tmp.path().join("one.wav"));
+        let rows = vec![recording(1, "One", "one.wav", Some("Folder"))];
+        let (planned, _) = plan_exports_with_template_and_grouping(
+            tmp.path(),
+            &tmp.path().join("out"),
+            &rows,
+            None,
+            SelectionMode::All,
+            &FilenameTemplate::default_template(),
+            ExportGrouping::DATE,
+        )
+        .unwrap();
+        let date_dir = date_directory_name(time::apple_local_fixed_offset_datetime(1.0));
+        assert_eq!(
+            planned[0].target,
+            tmp.path().join("out").join(date_dir).join("One.wav")
+        );
+    }
+
+    #[test]
+    fn plans_folder_then_date_output_and_uses_no_folder_for_unfiled_recordings() {
+        let tmp = tempfile::tempdir().unwrap();
+        for name in ["one.wav", "two.wav"] {
+            create_valid_wav(&tmp.path().join(name));
+        }
+        let rows = vec![
+            recording(1, "One", "one.wav", None),
+            recording(2, "Two", "two.wav", Some("Live")),
+        ];
+        let grouping = ExportGrouping::FOLDER.union(ExportGrouping::DATE);
+        let (planned, _) = plan_exports_with_template_and_grouping(
+            tmp.path(),
+            &tmp.path().join("out"),
+            &rows,
+            None,
+            SelectionMode::All,
+            &FilenameTemplate::default_template(),
+            grouping,
+        )
+        .unwrap();
+        let first_date_dir = date_directory_name(time::apple_local_fixed_offset_datetime(1.0));
+        let second_date_dir = date_directory_name(time::apple_local_fixed_offset_datetime(2.0));
+        assert_eq!(
+            planned[0].target,
+            tmp.path()
+                .join("out")
+                .join("No Folder")
+                .join(first_date_dir)
+                .join("One.wav")
+        );
+        assert_eq!(
+            planned[1].target,
+            tmp.path()
+                .join("out")
+                .join("Live")
+                .join(second_date_dir)
+                .join("Two.wav")
         );
     }
 

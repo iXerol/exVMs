@@ -88,6 +88,7 @@ final class RecordingsViewModel {
 
     static let outputDirectoryDefaultsKey = "com.ixerol.exvms.output-directory"
     static let filenameRecipeDefaultsKey = "com.ixerol.exvms.filename-recipe"
+    static let exportGroupingDefaultsKey = "com.ixerol.exvms.export-grouping"
     static let showDeletedDefaultsKey = "com.ixerol.exvms.show-deleted"
 
     private(set) var store: VoiceMemosStore?
@@ -113,6 +114,13 @@ final class RecordingsViewModel {
     var filenameRecipe = FilenameRecipe.default {
         didSet {
             persistFilenameRecipe()
+            invalidateExportInspections()
+            rebuildRows()
+        }
+    }
+    var exportGrouping = ExvmsExportGrouping.defaultTarget {
+        didSet {
+            userDefaults.set(Int(exportGrouping.rawValue), forKey: Self.exportGroupingDefaultsKey)
             invalidateExportInspections()
             rebuildRows()
         }
@@ -158,6 +166,7 @@ final class RecordingsViewModel {
         self.userDefaults = userDefaults
         self.outputDirectory = Self.loadPersistedOutputDirectory(from: userDefaults)
         self.filenameRecipe = Self.loadPersistedFilenameRecipe(from: userDefaults) ?? .default
+        self.exportGrouping = Self.loadPersistedExportGrouping(from: userDefaults)
         self.showDeleted = userDefaults.bool(forKey: Self.showDeletedDefaultsKey)
         configureOutputMonitor()
     }
@@ -324,6 +333,7 @@ final class RecordingsViewModel {
                 ids: ids,
                 outputDirectory: outputDirectory,
                 template: filenameRecipe.rustTemplate,
+                exportGrouping: exportGrouping,
                 jobs: 4
             )
             selectedIDs.removeAll()
@@ -488,12 +498,14 @@ final class RecordingsViewModel {
             }
             let generation = exportInspectionQueue.generation
             let recipe = filenameRecipe
+            let exportGrouping = exportGrouping
             let cache = hashCache
             exportInspectionQueue.tasks[id] = Task.detached(priority: .utility) { [weak self] in
                 let inspection = Self.inspectExport(
                     recording: recording,
                     outputDirectory: outputDirectory,
                     filenameRecipe: recipe,
+                    exportGrouping: exportGrouping,
                     hashCache: cache
                 )
                 guard !Task.isCancelled else {
@@ -556,6 +568,7 @@ final class RecordingsViewModel {
         recording: VoiceMemoRecording,
         outputDirectory: FilePath,
         filenameRecipe: FilenameRecipe,
+        exportGrouping: ExvmsExportGrouping,
         hashCache: FileHashCache
     ) -> ExportInspection {
         let sourceSize = sourceFileSize(path: recording.sourcePath)
@@ -564,6 +577,7 @@ final class RecordingsViewModel {
                 recording: recording,
                 outputDirectory: outputDirectory,
                 filenameRecipe: filenameRecipe,
+                exportGrouping: exportGrouping,
                 sourceSize: sourceSize,
                 hashCache: hashCache
             )
@@ -583,11 +597,16 @@ final class RecordingsViewModel {
         recording: VoiceMemoRecording,
         outputDirectory: FilePath?,
         filenameRecipe: FilenameRecipe,
+        exportGrouping: ExvmsExportGrouping,
         sourceSize: Int64?,
         hashCache: FileHashCache
     ) -> FilePath? {
         guard let outputDirectory,
-              let baseTarget = filenameRecipe.preview(for: recording, outputDirectory: outputDirectory) else {
+              let baseTarget = filenameRecipe.preview(
+                for: recording,
+                outputDirectory: outputDirectory,
+                exportGrouping: exportGrouping
+              ) else {
             return nil
         }
         guard let sourcePath = recording.sourcePath,
@@ -664,6 +683,15 @@ final class RecordingsViewModel {
         } catch {
             return nil
         }
+    }
+
+    private static func loadPersistedExportGrouping(from userDefaults: UserDefaults) -> ExvmsExportGrouping {
+        guard userDefaults.object(forKey: exportGroupingDefaultsKey) != nil else {
+            return .defaultTarget
+        }
+        let rawValue = UInt32(userDefaults.integer(forKey: exportGroupingDefaultsKey))
+        let grouping = ExvmsExportGrouping(rawValue: rawValue).intersection([.folder, .date])
+        return grouping.isEmpty ? .defaultTarget : grouping
     }
 
     private static func databaseAccessDeniedMessage(in directory: URL) -> String? {

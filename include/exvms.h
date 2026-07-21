@@ -36,6 +36,11 @@ typedef NS_ENUM(int32_t, ExvmsAvailability) {
     ExvmsAvailabilityChecking = 4,
 } NS_SWIFT_NAME(ExvmsAvailability);
 
+typedef NS_OPTIONS(uint32_t, ExvmsExportGrouping) {
+    ExvmsExportGroupingFolder = 1u << 0,
+    ExvmsExportGroupingDate = 1u << 1,
+} NS_SWIFT_NAME(ExvmsExportGrouping);
+
 typedef struct ExvmsStoreResult {
     ExvmsStatusCode code;
     char *_Nullable message;
@@ -102,8 +107,9 @@ ExvmsExportResult exvms_export_recordings(
     const int64_t *_Nonnull ids,
     uintptr_t ids_len,
     uintptr_t jobs,
-    const char *_Nullable filename_template
-) NS_SWIFT_NAME(exvmsExportRecordings(outputDirectory:ids:idsCount:jobs:filenameTemplate:));
+    const char *_Nullable filename_template,
+    ExvmsExportGrouping export_grouping
+) NS_SWIFT_NAME(exvmsExportRecordings(outputDirectory:ids:idsCount:jobs:filenameTemplate:exportGrouping:));
 
 void exvms_free_string(char *_Nullable value)
     NS_SWIFT_NAME(exvmsFreeString(_:));

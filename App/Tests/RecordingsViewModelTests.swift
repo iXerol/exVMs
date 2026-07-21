@@ -126,7 +126,24 @@ struct RecordingsViewModelTests {
         #expect(viewModel.selectedIDs.isEmpty)
         #expect(viewModel.lastExportSummary == ExportSummary(succeeded: 1, skipped: 0, failed: 0))
         #expect(client.exportedIDs == [1])
+        #expect(client.exportedGrouping == .folder)
         #expect(client.listRecordingsCallCount == 1)
+    }
+
+    @Test
+    func exportUsesSelectedGrouping() async {
+        let client = MockExvmsClient(recordings: [
+            .fixture(id: 1, title: "Local", availability: .inRecordingsDirectory),
+        ])
+        let viewModel = makeViewModel(client: client)
+        await viewModel.refreshAsync()
+        viewModel.outputDirectory = FilePath(NSTemporaryDirectory())
+        viewModel.exportGrouping = [.folder, .date]
+        viewModel.selectedIDs = [1]
+
+        await viewModel.exportSelectionAsync()
+
+        #expect(client.exportedGrouping == [.folder, .date])
     }
 
     @Test
@@ -225,6 +242,24 @@ struct RecordingsViewModelTests {
             userDefaults: defaults
         )
         #expect(restoredViewModel.filenameRecipe == recipe)
+    }
+
+    @Test
+    func exportGroupingPersistsAndRestoresRawValue() throws {
+        let defaults = try temporaryUserDefaults()
+        let firstViewModel = RecordingsViewModel(
+            client: MockExvmsClient(recordings: []),
+            userDefaults: defaults
+        )
+        firstViewModel.exportGrouping = .date
+
+        let restoredViewModel = RecordingsViewModel(
+            client: MockExvmsClient(recordings: []),
+            userDefaults: defaults
+        )
+
+        #expect(defaults.integer(forKey: RecordingsViewModel.exportGroupingDefaultsKey) == Int(ExvmsExportGrouping.date.rawValue))
+        #expect(restoredViewModel.exportGrouping == .date)
     }
 
     @Test
@@ -476,6 +511,7 @@ private actor AvailabilityCallRecorder {
 
 private final class MockExvmsClient: ExvmsClient, @unchecked Sendable {
     var exportedIDs: [Int64] = []
+    var exportedGrouping: ExvmsExportGrouping?
     var listRecordingsCallCount = 0
     private var store: VoiceMemosStore
     private var recordings: [VoiceMemoRecording]
@@ -505,8 +541,15 @@ private final class MockExvmsClient: ExvmsClient, @unchecked Sendable {
         )
     }
 
-    func exportRecordings(ids: [Int64], outputDirectory: FilePath, template: String, jobs: Int) async throws -> ExportSummary {
+    func exportRecordings(
+        ids: [Int64],
+        outputDirectory: FilePath,
+        template: String,
+        exportGrouping: ExvmsExportGrouping,
+        jobs: Int
+    ) async throws -> ExportSummary {
         exportedIDs = ids
+        exportedGrouping = exportGrouping
         return ExportSummary(succeeded: ids.count, skipped: 0, failed: 0)
     }
 }

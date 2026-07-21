@@ -108,7 +108,13 @@ struct ExportSummary: Equatable {
 
 protocol ExvmsClient: Sendable {
     func listRecordings() async throws -> RecordingCatalog
-    func exportRecordings(ids: [Int64], outputDirectory: FilePath, template: String, jobs: Int) async throws -> ExportSummary
+    func exportRecordings(
+        ids: [Int64],
+        outputDirectory: FilePath,
+        template: String,
+        exportGrouping: ExvmsExportGrouping,
+        jobs: Int
+    ) async throws -> ExportSummary
 }
 
 struct RustExvmsClient: ExvmsClient {
@@ -151,7 +157,13 @@ struct RustExvmsClient: ExvmsClient {
         }.value
     }
 
-    func exportRecordings(ids: [Int64], outputDirectory: FilePath, template: String, jobs: Int) async throws -> ExportSummary {
+    func exportRecordings(
+        ids: [Int64],
+        outputDirectory: FilePath,
+        template: String,
+        exportGrouping: ExvmsExportGrouping,
+        jobs: Int
+    ) async throws -> ExportSummary {
         try await Task.detached(priority: .userInitiated) {
             try outputDirectory.withPlatformString { outputPointer in
                 try template.withCString { templatePointer in
@@ -163,7 +175,8 @@ struct RustExvmsClient: ExvmsClient {
                             ids: buffer.baseAddress!,
                             idsCount: UInt(buffer.count),
                             jobs: UInt(jobs),
-                            filenameTemplate: templatePointer
+                            filenameTemplate: templatePointer,
+                            exportGrouping: exportGrouping
                         )
                     }
                     defer { exvmsFreeExportResult(result) }

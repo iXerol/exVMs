@@ -4,7 +4,7 @@ use std::path::Path;
 use std::ptr;
 
 use crate::db::{self, RecordingPathKind, RecordingStoreKind};
-use crate::export::{self, SelectionMode};
+use crate::export::{self, ExportGrouping, SelectionMode};
 use crate::storage;
 use crate::template::FilenameTemplate;
 use crate::{ExvmsError, Result};
@@ -153,6 +153,7 @@ pub unsafe extern "C" fn exvms_export_recordings(
     ids_len: usize,
     jobs: usize,
     filename_template: *const c_char,
+    export_grouping: u32,
 ) -> ExvmsExportResult {
     guard_export_result(|| {
         let output_dir = c_str_arg(output_dir, "output_dir")?;
@@ -164,7 +165,8 @@ pub unsafe extern "C" fn exvms_export_recordings(
         }
 
         let template = optional_template_arg(filename_template)?;
-        export_recordings(&output_dir, ids, jobs, &template)
+        let grouping = ExportGrouping::from_bits(export_grouping)?;
+        export_recordings(&output_dir, ids, jobs, &template, grouping)
     })
 }
 
@@ -232,16 +234,18 @@ fn export_recordings(
     ids: &[i64],
     jobs: usize,
     template: &FilenameTemplate,
+    grouping: ExportGrouping,
 ) -> Result<ExvmsExportResult> {
     let store = storage::discover()?;
     let rows = db::load_recordings(&store.db_path)?;
-    let (planned, skipped) = export::plan_exports_with_template(
+    let (planned, skipped) = export::plan_exports_with_template_and_grouping(
         &store.recordings_dir,
         Path::new(output_dir),
         &rows,
         Some(ids),
         SelectionMode::ExplicitIds,
         template,
+        grouping,
     )?;
     let report = export::execute_exports(planned, skipped, jobs.max(1));
 
@@ -444,8 +448,16 @@ mod tests {
     #[test]
     fn export_rejects_missing_ids_before_discovery() {
         let output = CString::new("/tmp/exvms-out").unwrap();
-        let result =
-            unsafe { exvms_export_recordings(output.as_ptr(), ptr::null(), 1, 1, ptr::null()) };
+        let result = unsafe {
+            exvms_export_recordings(
+                output.as_ptr(),
+                ptr::null(),
+                1,
+                1,
+                ptr::null(),
+                ExportGrouping::default().bits(),
+            )
+        };
         assert_eq!(result.code, EXVMS_INVALID_ARGUMENT);
         assert!(!result.message.is_null());
         exvms_free_export_result(result);
@@ -463,6 +475,7 @@ mod tests {
                 ids.len(),
                 1,
                 template.as_ptr(),
+                ExportGrouping::default().bits(),
             )
         };
         assert_eq!(result.code, EXVMS_INVALID_ARGUMENT);

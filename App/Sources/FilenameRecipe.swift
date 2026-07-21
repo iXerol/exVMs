@@ -1,6 +1,39 @@
 import Foundation
 import System
 
+extension ExvmsExportGrouping: @retroactive Identifiable, @retroactive CaseIterable, @unchecked Sendable {
+    public static let allCases: [ExvmsExportGrouping] = [
+        .date,
+        .folder,
+        [.folder, .date],
+    ]
+    static let selectableCases: [ExvmsExportGrouping] = [.folder, .date]
+    static let defaultTarget: ExvmsExportGrouping = .folder
+
+    public var id: UInt32 { rawValue }
+
+    var localizationKey: String {
+        switch self {
+        case .date:
+            "export.folder.date"
+        case .folder:
+            "export.folder.voice_memos_folder"
+        case [.folder, .date]:
+            "export.folder.voice_memos_folder_and_date"
+        default:
+            "export.folder.voice_memos_folder"
+        }
+    }
+
+    var usesVoiceMemosFolder: Bool {
+        contains(.folder)
+    }
+
+    var usesDate: Bool {
+        contains(.date)
+    }
+}
+
 enum FilenameToken: String, CaseIterable, Identifiable, Codable {
     case title
     case id
@@ -180,14 +213,25 @@ struct FilenameRecipe: Equatable, Codable {
         }
     }
 
-    func preview(for recording: VoiceMemoRecording, outputDirectory: FilePath) -> FilePath? {
+    func preview(
+        for recording: VoiceMemoRecording,
+        outputDirectory: FilePath,
+        exportGrouping: ExvmsExportGrouping = .defaultTarget
+    ) -> FilePath? {
         guard recording.availability.isExportable else {
             return nil
         }
 
         var directory = outputDirectory.fileURL(isDirectory: true)
-        if let folderName = recording.folderName, !folderName.isEmpty {
-            directory.appendPathComponent(Self.sanitizeFilename(folderName), isDirectory: true)
+        if exportGrouping.usesVoiceMemosFolder {
+            if let folderName = recording.folderName, !folderName.isEmpty {
+                directory.appendPathComponent(Self.sanitizeFilename(folderName), isDirectory: true)
+            } else if exportGrouping.usesDate {
+                directory.appendPathComponent("No Folder", isDirectory: true)
+            }
+        }
+        if exportGrouping.usesDate {
+            directory.appendPathComponent(Self.dateDirectoryName(for: recording), isDirectory: true)
         }
 
         var stem = renderStem(for: recording)
@@ -264,6 +308,10 @@ struct FilenameRecipe: Equatable, Codable {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = format
         return formatter
+    }
+
+    private static func dateDirectoryName(for recording: VoiceMemoRecording) -> String {
+        dateFormatter("yyyy-M-d").string(from: recording.recordingDate)
     }
 
     static func sanitizeFilename(_ value: String) -> String {

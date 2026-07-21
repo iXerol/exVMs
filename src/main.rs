@@ -1,9 +1,9 @@
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 use exvms::db;
-use exvms::export::{self, ExportReport, SelectionMode};
+use exvms::export::{self, ExportGrouping, ExportReport, SelectionMode};
 use exvms::storage;
 use exvms::template::FilenameTemplate;
 use exvms::time;
@@ -39,8 +39,17 @@ enum Command {
         #[arg(short = 'p', long = "parallel")]
         jobs: Option<usize>,
         /// Filename template for exported recordings.
-        #[arg(short = 'f', long = "filename-format")]
+        #[arg(short = 'n', long = "filename-format")]
         filename_format: Option<String>,
+        /// Output folder grouping. Use f for Voice Memos folder, d for date. Repeat or combine values.
+        #[arg(
+            short = 'f',
+            long = "folder",
+            value_name = "f|d",
+            action = ArgAction::Append,
+            value_parser = parse_folder_grouping
+        )]
+        folder_grouping: Vec<ExportGrouping>,
     },
 }
 
@@ -64,7 +73,8 @@ fn run() -> exvms::Result<()> {
             all,
             jobs,
             filename_format,
-        } => export_cmd(output, ids, all, jobs, filename_format),
+            folder_grouping,
+        } => export_cmd(output, ids, all, jobs, filename_format, folder_grouping),
     }
 }
 
@@ -145,6 +155,7 @@ fn export_cmd(
     all: bool,
     jobs: Option<usize>,
     filename_format: Option<String>,
+    folder_grouping: Vec<ExportGrouping>,
 ) -> exvms::Result<()> {
     if all && !ids.is_empty() {
         return Err(exvms::ExvmsError::InvalidArguments(
@@ -163,6 +174,7 @@ fn export_cmd(
         Some(value) => FilenameTemplate::parse(&value)?,
         None => FilenameTemplate::default_template(),
     };
+    let grouping = combine_folder_grouping(folder_grouping);
     let mode = if ids.is_empty() {
         SelectionMode::All
     } else {
@@ -173,13 +185,14 @@ fn export_cmd(
     } else {
         Some(ids.as_slice())
     };
-    let (planned, skipped) = export::plan_exports_with_template(
+    let (planned, skipped) = export::plan_exports_with_template_and_grouping(
         &store.recordings_dir,
         &output,
         &rows,
         selected,
         mode,
         &template,
+        grouping,
     )?;
     let report =
         export::execute_exports(planned, skipped, jobs.unwrap_or_else(export::default_jobs));
@@ -190,6 +203,42 @@ fn export_cmd(
     } else {
         std::process::exit(2);
     }
+}
+
+fn parse_folder_grouping(value: &str) -> std::result::Result<ExportGrouping, String> {
+    let mut grouping = ExportGrouping::from_bits(0).map_err(|err| err.to_string())?;
+    for raw_part in value.split(',') {
+        let part = raw_part.trim().to_ascii_lowercase();
+        if part.is_empty() {
+            continue;
+        }
+        match part.as_str() {
+            "f" | "folder" | "voice-memos-folder" | "voice_memos_folder" => {
+                grouping = grouping.union(ExportGrouping::FOLDER);
+            }
+            "d" | "date" => {
+                grouping = grouping.union(ExportGrouping::DATE);
+            }
+            "fd" | "df" | "both" => {
+                grouping = grouping
+                    .union(ExportGrouping::FOLDER)
+                    .union(ExportGrouping::DATE);
+            }
+            _ => {
+                return Err(format!(
+                    "unsupported folder grouping '{raw_part}'; use f, d, fd, folder, date, or both"
+                ));
+            }
+        }
+    }
+    Ok(grouping)
+}
+
+fn combine_folder_grouping(values: Vec<ExportGrouping>) -> ExportGrouping {
+    values
+        .into_iter()
+        .reduce(|combined, value| combined.union(value))
+        .unwrap_or_default()
 }
 
 fn confirm_export_all() -> exvms::Result<bool> {
