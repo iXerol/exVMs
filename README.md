@@ -46,10 +46,19 @@ target/release/exvms export -o /path/to/export -a
 Use a filename template:
 
 ```sh
-target/release/exvms export -o /path/to/export -f "{datetime:%Y-%m-%d %H-%M-%S} {title}"
+target/release/exvms export -o /path/to/export -n "{datetime:%Y-%m-%d %H-%M-%S} {title}"
 ```
 
 Supported template fields are `{id}`, `{title}`, `{date:FORMAT}`, `{time:FORMAT}`, and `{datetime:FORMAT}`. `FORMAT` uses `strftime` / `chrono` directives. The source file extension is appended automatically.
+
+Choose output subdirectories:
+
+```sh
+target/release/exvms export -o /path/to/export -a -f d
+target/release/exvms export -o /path/to/export -a -f f -f d
+```
+
+The `-f, --folder` option accepts `f` for the Voice Memos folder, `d` for the recording date, or `fd` for both. When both are selected, exports use `Voice Memos Folder/YYYY-M-D/Recording.m4a`; recordings without a Voice Memos folder use `No Folder/YYYY-M-D/Recording.m4a`.
 
 Recordings that are missing locally, still need download, or resolve outside the active Voice Memos recordings directory are not exported.
 
@@ -74,6 +83,8 @@ The Export button stays disabled until an output directory exists and at least o
 Deleted recordings are hidden by default. Enable **Show deleted recordings** in the app's Preferences to include them in the table; they use a dimmed style and a struck-through title.
 
 The filename editor is a single mixed text field. Type literal text directly, and click the title/date/time chips to insert them at the current cursor position. The example below the field previews the resulting filename.
+
+The folder control above the table chooses whether exports are grouped by date, by Voice Memos folder, or by Voice Memos folder and date.
 
 The app is localized in English, Simplified Chinese, Traditional Chinese, and Japanese.
 
