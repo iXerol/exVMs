@@ -35,7 +35,7 @@ pub enum ExvmsError {
     #[error("recording id(s) not found: {0:?}")]
     MissingIds(Vec<i64>),
     #[error(
-        "recording id(s) need download or are incomplete and cannot be exported: {0:?}. Open/download them in Voice Memos.app first"
+        "recording id(s) need download, are incomplete, or are corrupted and cannot be exported: {0:?}. Check the availability details in `view`, or open/download them in Voice Memos.app first"
     )]
     NeedsDownloadRequested(Vec<i64>),
     #[error("no local-exportable recordings were selected")]
@@ -52,6 +52,8 @@ pub enum ExvmsError {
     InvalidArguments(String),
     #[error("invalid filename format: {0}")]
     InvalidFilenameFormat(String),
+    #[error("export cancelled")]
+    Cancelled,
     #[error("SQLite error: {0}")]
     Sql(#[from] rusqlite::Error),
     #[error("I/O error: {0}")]
