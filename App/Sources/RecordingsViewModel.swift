@@ -1,6 +1,7 @@
 import AVFoundation
 import Observation
 import CryptoKit
+import os
 import System
 import SwiftUI
 
@@ -85,6 +86,8 @@ final class RecordingsViewModel {
     private static let availabilityConcurrencyLimit = 4
     private static let exportInspectionConcurrencyLimit = 2
     private static let prefetchCount = 16
+    private static let audioDurationTimeout: Duration = .seconds(5)
+    private static let logger = Logger(subsystem: "dev.ixerol.exvms", category: "export")
 
     static let outputDirectoryDefaultsKey = "com.ixerol.exvms.output-directory"
     static let filenameRecipeDefaultsKey = "com.ixerol.exvms.filename-recipe"
@@ -155,6 +158,10 @@ final class RecordingsViewModel {
     private var availabilityQueue = AvailabilityQueueState()
     @ObservationIgnored
     private var exportInspectionQueue = ExportInspectionQueueState()
+    @ObservationIgnored
+    private var exportTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var exportGeneration = 0
 
     init(
         client: ExvmsClient,
@@ -211,9 +218,26 @@ final class RecordingsViewModel {
     }
 
     func exportSelection() {
-        Task {
-            await exportSelectionAsync()
+        guard exportTask == nil else {
+            return
         }
+        exportGeneration += 1
+        let generation = exportGeneration
+        exportTask = Task {
+            await exportSelectionAsync(generation: generation)
+        }
+    }
+
+    func cancelExport() {
+        guard isExporting || exportTask != nil else {
+            return
+        }
+        exportGeneration += 1
+        exportTask?.cancel()
+        exportTask = nil
+        isExporting = false
+        errorMessage = String(localized: "error.export.cancelled")
+        Self.logger.info("Export cancellation requested")
     }
 
     func checkAccessAndRefreshAsync() async {
@@ -316,6 +340,11 @@ final class RecordingsViewModel {
     }
 
     func exportSelectionAsync() async {
+        exportGeneration += 1
+        await exportSelectionAsync(generation: exportGeneration)
+    }
+
+    private func exportSelectionAsync(generation: Int) async {
         guard let outputDirectory, canExportSelection else {
             return
         }
@@ -328,14 +357,21 @@ final class RecordingsViewModel {
 
         isExporting = true
         errorMessage = nil
+        let cancellationToken = ExvmsCancellationToken()
+        Self.logger.info("Starting export for \(ids.count) recording(s)")
         do {
             lastExportSummary = try await client.exportRecordings(
                 ids: ids,
                 outputDirectory: outputDirectory,
                 template: filenameRecipe.rustTemplate,
                 exportGrouping: exportGrouping,
-                jobs: 4
+                jobs: 4,
+                cancellationToken: cancellationToken
             )
+            guard generation == exportGeneration else {
+                return
+            }
+            Self.logger.info("Export finished")
             selectedIDs.removeAll()
             invalidateExportInspections()
             await rebuildRowsAsync()
@@ -343,10 +379,20 @@ final class RecordingsViewModel {
             for id in ids {
                 requestInspections(for: id, orderedIDs: orderedIDs)
             }
+        } catch is CancellationError {
+            cancellationToken.cancel()
+            Self.logger.info("Export task cancelled")
+        } catch ExvmsClientError.cancelled {
+            Self.logger.info("Rust export cancelled")
         } catch {
-            errorMessage = error.localizedDescription
+            if generation == exportGeneration {
+                errorMessage = error.localizedDescription
+            }
         }
-        isExporting = false
+        if generation == exportGeneration {
+            isExporting = false
+            exportTask = nil
+        }
     }
 
     private func configureOutputMonitor() {
@@ -883,7 +929,7 @@ final class RecordingsViewModel {
                     }
                     group.addTask {
                         do {
-                            try await Task.sleep(for: .seconds(15))
+                            try await Task.sleep(for: audioDurationTimeout)
                         } catch is CancellationError {
                             throw AssetDurationError.cancelled
                         } catch {

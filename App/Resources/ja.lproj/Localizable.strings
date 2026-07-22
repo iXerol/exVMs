@@ -16,6 +16,7 @@
 "action.refresh" = "更新";
 "action.output" = "書き出し先";
 "action.export" = "書き出す";
+"action.cancel_export" = "キャンセル";
 "action.preview" = "プレビュー";
 "action.select_all" = "すべて選択";
 "action.select_none" = "選択解除";
@@ -51,6 +52,7 @@
 
 "error.recordings.list_failed" = "録音を一覧表示できませんでした";
 "error.export.failed" = "書き出しに失敗しました";
+"error.export.cancelled" = "書き出しをキャンセルしました";
 "error.voice_memos_access.generic" = "exVMs はボイスメモデータを読み取れません。exVMs をフルディスクアクセスに追加してから更新してください。";
 "error.voice_memos_access.path %@" = "exVMs は %@ のボイスメモデータを読み取れません。exVMs をフルディスクアクセスに追加してから更新してください。";
 

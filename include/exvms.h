@@ -98,6 +98,8 @@ typedef struct ExvmsExportResult {
     uintptr_t failures_len;
 } ExvmsExportResult;
 
+typedef struct ExvmsCancelToken ExvmsCancelToken;
+
 ExvmsStoreResult exvms_discover_store(void)
     NS_SWIFT_NAME(exvmsDiscoverStore());
 ExvmsListResult exvms_list_recordings(void)
@@ -110,6 +112,22 @@ ExvmsExportResult exvms_export_recordings(
     const char *_Nullable filename_template,
     ExvmsExportGrouping export_grouping
 ) NS_SWIFT_NAME(exvmsExportRecordings(outputDirectory:ids:idsCount:jobs:filenameTemplate:exportGrouping:));
+ExvmsExportResult exvms_export_recordings_with_cancel(
+    const char *_Nonnull output_dir,
+    const int64_t *_Nonnull ids,
+    uintptr_t ids_len,
+    uintptr_t jobs,
+    const char *_Nullable filename_template,
+    ExvmsExportGrouping export_grouping,
+    const ExvmsCancelToken *_Nullable cancel_token
+) NS_SWIFT_NAME(exvmsExportRecordings(outputDirectory:ids:idsCount:jobs:filenameTemplate:exportGrouping:cancelToken:));
+
+ExvmsCancelToken *_Nonnull exvms_cancel_token_create(void)
+    NS_SWIFT_NAME(exvmsCancelTokenCreate());
+void exvms_cancel_token_cancel(const ExvmsCancelToken *_Nullable token)
+    NS_SWIFT_NAME(exvmsCancelTokenCancel(_:));
+void exvms_cancel_token_free(ExvmsCancelToken *_Nullable token)
+    NS_SWIFT_NAME(exvmsCancelTokenFree(_:));
 
 void exvms_free_string(char *_Nullable value)
     NS_SWIFT_NAME(exvmsFreeString(_:));

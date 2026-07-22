@@ -16,6 +16,7 @@
 "action.refresh" = "重新整理";
 "action.output" = "匯出目錄";
 "action.export" = "匯出";
+"action.cancel_export" = "取消";
 "action.preview" = "預覽";
 "action.select_all" = "全選";
 "action.select_none" = "全不選";
@@ -51,6 +52,7 @@
 
 "error.recordings.list_failed" = "無法列出錄音";
 "error.export.failed" = "匯出失敗";
+"error.export.cancelled" = "匯出已取消";
 "error.voice_memos_access.generic" = "exVMs 無法讀取語音備忘錄資料。請將 exVMs 加入完整磁碟取用權限，然後重新整理。";
 "error.voice_memos_access.path %@" = "exVMs 無法讀取 %@ 的語音備忘錄資料。請將 exVMs 加入完整磁碟取用權限，然後重新整理。";
 

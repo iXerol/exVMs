@@ -3,12 +3,35 @@ import System
 
 enum ExvmsClientError: LocalizedError {
     case rust(String)
+    case cancelled
 
     var errorDescription: String? {
         switch self {
         case .rust(let message):
             message
+        case .cancelled:
+            String(localized: "error.export.cancelled")
         }
+    }
+}
+
+final class ExvmsCancellationToken: @unchecked Sendable {
+    private let pointer: OpaquePointer
+
+    init() {
+        pointer = exvmsCancelTokenCreate()
+    }
+
+    deinit {
+        exvmsCancelTokenFree(pointer)
+    }
+
+    func cancel() {
+        exvmsCancelTokenCancel(pointer)
+    }
+
+    func withPointer<T>(_ body: (OpaquePointer) throws -> T) rethrows -> T {
+        try body(pointer)
     }
 }
 
@@ -113,7 +136,8 @@ protocol ExvmsClient: Sendable {
         outputDirectory: FilePath,
         template: String,
         exportGrouping: ExvmsExportGrouping,
-        jobs: Int
+        jobs: Int,
+        cancellationToken: ExvmsCancellationToken
     ) async throws -> ExportSummary
 }
 
@@ -162,37 +186,51 @@ struct RustExvmsClient: ExvmsClient {
         outputDirectory: FilePath,
         template: String,
         exportGrouping: ExvmsExportGrouping,
-        jobs: Int
+        jobs: Int,
+        cancellationToken: ExvmsCancellationToken
     ) async throws -> ExportSummary {
-        try await Task.detached(priority: .userInitiated) {
-            try outputDirectory.withPlatformString { outputPointer in
-                try template.withCString { templatePointer in
-                    var mutableIds = ids
-                    let result = mutableIds.withUnsafeMutableBufferPointer { buffer in
-                        precondition(buffer.baseAddress != nil, "export requires at least one recording id")
-                        return exvmsExportRecordings(
-                            outputDirectory: outputPointer,
-                            ids: buffer.baseAddress!,
-                            idsCount: UInt(buffer.count),
-                            jobs: UInt(jobs),
-                            filenameTemplate: templatePointer,
-                            exportGrouping: exportGrouping
+        try await withTaskCancellationHandler {
+            try await Task.detached(priority: .userInitiated) {
+                try Task.checkCancellation()
+                return try outputDirectory.withPlatformString { outputPointer in
+                    try template.withCString { templatePointer in
+                        var mutableIds = ids
+                        let result = mutableIds.withUnsafeMutableBufferPointer { buffer in
+                            precondition(buffer.baseAddress != nil, "export requires at least one recording id")
+                            return cancellationToken.withPointer { tokenPointer in
+                                exvmsExportRecordings(
+                                    outputDirectory: outputPointer,
+                                    ids: buffer.baseAddress!,
+                                    idsCount: UInt(buffer.count),
+                                    jobs: UInt(jobs),
+                                    filenameTemplate: templatePointer,
+                                    exportGrouping: exportGrouping,
+                                    cancelToken: tokenPointer
+                                )
+                            }
+                        }
+                        defer { exvmsFreeExportResult(result) }
+
+                        guard result.code == .OK else {
+                            let message = Self.string(from: result.message) ?? ExVMsStrings.Error.Export.failed
+                            if message.localizedCaseInsensitiveContains("cancelled") {
+                                throw ExvmsClientError.cancelled
+                            }
+                            throw ExvmsClientError.rust(message)
+                        }
+
+                        try Task.checkCancellation()
+                        return ExportSummary(
+                            succeeded: Int(result.successes_len),
+                            skipped: Int(result.skipped_len),
+                            failed: Int(result.failures_len)
                         )
                     }
-                    defer { exvmsFreeExportResult(result) }
-
-                    guard result.code == .OK else {
-                        throw ExvmsClientError.rust(Self.string(from: result.message) ?? ExVMsStrings.Error.Export.failed)
-                    }
-
-                    return ExportSummary(
-                        succeeded: Int(result.successes_len),
-                        skipped: Int(result.skipped_len),
-                        failed: Int(result.failures_len)
-                    )
                 }
-            }
-        }.value
+            }.value
+        } onCancel: {
+            cancellationToken.cancel()
+        }
     }
 
     private static func buffer<T>(_ pointer: UnsafeMutablePointer<T>?, count: Int) -> [T] {

@@ -16,6 +16,7 @@
 "action.refresh" = "刷新";
 "action.output" = "导出目录";
 "action.export" = "导出";
+"action.cancel_export" = "取消";
 "action.preview" = "预览";
 "action.select_all" = "全选";
 "action.select_none" = "全不选";
@@ -51,6 +52,7 @@
 
 "error.recordings.list_failed" = "无法列出录音";
 "error.export.failed" = "导出失败";
+"error.export.cancelled" = "导出已取消";
 "error.voice_memos_access.generic" = "exVMs 无法读取语音备忘录数据。请将 exVMs 添加到完全磁盘访问权限，然后刷新。";
 "error.voice_memos_access.path %@" = "exVMs 无法读取 %@ 处的语音备忘录数据。请将 exVMs 添加到完全磁盘访问权限，然后刷新。";
 

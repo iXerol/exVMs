@@ -2,6 +2,7 @@ use std::ffi::{CStr, CString, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::db::{self, RecordingPathKind, RecordingStoreKind};
 use crate::export::{self, ExportGrouping, SelectionMode};
@@ -13,6 +14,10 @@ const EXVMS_OK: i32 = 0;
 const EXVMS_ERROR: i32 = 1;
 const EXVMS_INVALID_ARGUMENT: i32 = 2;
 const EXVMS_PANIC: i32 = 255;
+
+pub struct ExvmsCancelToken {
+    cancelled: AtomicBool,
+}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -155,6 +160,35 @@ pub unsafe extern "C" fn exvms_export_recordings(
     filename_template: *const c_char,
     export_grouping: u32,
 ) -> ExvmsExportResult {
+    unsafe {
+        exvms_export_recordings_with_cancel(
+            output_dir,
+            ids,
+            ids_len,
+            jobs,
+            filename_template,
+            export_grouping,
+            ptr::null(),
+        )
+    }
+}
+
+/// # Safety
+///
+/// `output_dir` and `filename_template`, when non-null, must point to valid
+/// NUL-terminated UTF-8 strings for the duration of the call. `ids` must point
+/// to `ids_len` contiguous `i64` values when `ids_len > 0`. `cancel_token`,
+/// when non-null, must be a token allocated by `exvms_cancel_token_create`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn exvms_export_recordings_with_cancel(
+    output_dir: *const c_char,
+    ids: *const i64,
+    ids_len: usize,
+    jobs: usize,
+    filename_template: *const c_char,
+    export_grouping: u32,
+    cancel_token: *const ExvmsCancelToken,
+) -> ExvmsExportResult {
     guard_export_result(|| {
         let output_dir = c_str_arg(output_dir, "output_dir")?;
         let ids = ids_arg(ids, ids_len)?;
@@ -166,8 +200,36 @@ pub unsafe extern "C" fn exvms_export_recordings(
 
         let template = optional_template_arg(filename_template)?;
         let grouping = ExportGrouping::from_bits(export_grouping)?;
-        export_recordings(&output_dir, ids, jobs, &template, grouping)
+        export_recordings(&output_dir, ids, jobs, &template, grouping, cancel_token)
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn exvms_cancel_token_create() -> *mut ExvmsCancelToken {
+    Box::into_raw(Box::new(ExvmsCancelToken {
+        cancelled: AtomicBool::new(false),
+    }))
+}
+
+/// # Safety
+///
+/// `token` must be null or allocated by `exvms_cancel_token_create`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn exvms_cancel_token_cancel(token: *const ExvmsCancelToken) {
+    if let Some(token) = unsafe { token.as_ref() } {
+        token.cancelled.store(true, Ordering::SeqCst);
+    }
+}
+
+/// # Safety
+///
+/// `token` must be null or allocated by `exvms_cancel_token_create`, and must
+/// not be used again after this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn exvms_cancel_token_free(token: *mut ExvmsCancelToken) {
+    if !token.is_null() {
+        drop(unsafe { Box::from_raw(token) });
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -235,9 +297,24 @@ fn export_recordings(
     jobs: usize,
     template: &FilenameTemplate,
     grouping: ExportGrouping,
+    cancel_token: *const ExvmsCancelToken,
 ) -> Result<ExvmsExportResult> {
+    let cancel_token_addr = cancel_token as usize;
+    let is_cancelled = move || cancel_token_cancelled(cancel_token_addr as *const ExvmsCancelToken);
+    if is_cancelled() {
+        return Err(ExvmsError::Cancelled);
+    }
+    eprintln!(
+        "exvms export: starting ids={} jobs={} output={}",
+        ids.len(),
+        jobs.max(1),
+        output_dir
+    );
     let store = storage::discover()?;
     let rows = db::load_recordings(&store.db_path)?;
+    if is_cancelled() {
+        return Err(ExvmsError::Cancelled);
+    }
     let (planned, skipped) = export::plan_exports_with_template_and_grouping(
         &store.recordings_dir,
         Path::new(output_dir),
@@ -247,7 +324,25 @@ fn export_recordings(
         template,
         grouping,
     )?;
-    let report = export::execute_exports(planned, skipped, jobs.max(1));
+    eprintln!(
+        "exvms export: planned={} skipped={}",
+        planned.len(),
+        skipped.len()
+    );
+    if is_cancelled() {
+        return Err(ExvmsError::Cancelled);
+    }
+    let report = export::execute_exports_with_cancel(planned, skipped, jobs.max(1), is_cancelled);
+    if is_cancelled() {
+        eprintln!("exvms export: cancelled");
+        return Err(ExvmsError::Cancelled);
+    }
+    eprintln!(
+        "exvms export: finished successes={} skipped={} failures={}",
+        report.successes.len(),
+        report.skipped.len(),
+        report.failures.len()
+    );
 
     let successes = report
         .successes
@@ -297,6 +392,13 @@ fn export_recordings(
         failures,
         failures_len,
     })
+}
+
+fn cancel_token_cancelled(token: *const ExvmsCancelToken) -> bool {
+    let Some(token) = (unsafe { token.as_ref() }) else {
+        return false;
+    };
+    token.cancelled.load(Ordering::SeqCst)
 }
 
 fn c_str_arg(ptr: *const c_char, name: &str) -> Result<String> {

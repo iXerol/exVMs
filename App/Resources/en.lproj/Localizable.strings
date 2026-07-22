@@ -16,6 +16,7 @@
 "action.refresh" = "Refresh";
 "action.output" = "Output";
 "action.export" = "Export";
+"action.cancel_export" = "Cancel";
 "action.preview" = "Preview";
 "action.select_all" = "Select All";
 "action.select_none" = "Select None";
@@ -51,6 +52,7 @@
 
 "error.recordings.list_failed" = "Failed to list recordings";
 "error.export.failed" = "Export failed";
+"error.export.cancelled" = "Export cancelled";
 "error.voice_memos_access.generic" = "exVMs cannot read Voice Memos data. Add exVMs to Full Disk Access, then refresh.";
 "error.voice_memos_access.path %@" = "exVMs cannot read Voice Memos data at %@. Add exVMs to Full Disk Access, then refresh.";
 

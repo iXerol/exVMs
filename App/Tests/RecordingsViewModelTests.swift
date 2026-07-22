@@ -131,6 +131,48 @@ struct RecordingsViewModelTests {
     }
 
     @Test
+    func cancelExportReleasesExportingState() async throws {
+        let client = MockExvmsClient(recordings: [
+            .fixture(id: 1, title: "Local", availability: .inRecordingsDirectory),
+        ])
+        client.exportDelay = .seconds(60)
+        let viewModel = makeViewModel(client: client)
+        await viewModel.refreshAsync()
+        viewModel.outputDirectory = FilePath(NSTemporaryDirectory())
+        viewModel.selectedIDs = [1]
+
+        viewModel.exportSelection()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(viewModel.isExporting)
+
+        viewModel.cancelExport()
+        #expect(!viewModel.isExporting)
+        #expect(viewModel.errorMessage == String(localized: "error.export.cancelled"))
+    }
+
+    @Test
+    func directExportCancellationPropagatesToClient() async throws {
+        let client = MockExvmsClient(recordings: [
+            .fixture(id: 1, title: "Local", availability: .inRecordingsDirectory),
+        ])
+        client.exportDelay = .seconds(60)
+        let viewModel = makeViewModel(client: client)
+        await viewModel.refreshAsync()
+        viewModel.outputDirectory = FilePath(NSTemporaryDirectory())
+        viewModel.selectedIDs = [1]
+
+        let task = Task {
+            await viewModel.exportSelectionAsync()
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+        await task.value
+
+        #expect(!viewModel.isExporting)
+        #expect(client.exportWasCancelled)
+    }
+
+    @Test
     func exportUsesSelectedGrouping() async {
         let client = MockExvmsClient(recordings: [
             .fixture(id: 1, title: "Local", availability: .inRecordingsDirectory),
@@ -513,6 +555,8 @@ private final class MockExvmsClient: ExvmsClient, @unchecked Sendable {
     var exportedIDs: [Int64] = []
     var exportedGrouping: ExvmsExportGrouping?
     var listRecordingsCallCount = 0
+    var exportDelay: Duration?
+    var exportWasCancelled = false
     private var store: VoiceMemosStore
     private var recordings: [VoiceMemoRecording]
     private var listError: Error?
@@ -546,10 +590,20 @@ private final class MockExvmsClient: ExvmsClient, @unchecked Sendable {
         outputDirectory: FilePath,
         template: String,
         exportGrouping: ExvmsExportGrouping,
-        jobs: Int
+        jobs: Int,
+        cancellationToken: ExvmsCancellationToken
     ) async throws -> ExportSummary {
         exportedIDs = ids
         exportedGrouping = exportGrouping
+        if let exportDelay {
+            do {
+                try await Task.sleep(for: exportDelay)
+            } catch is CancellationError {
+                exportWasCancelled = true
+                cancellationToken.cancel()
+                throw CancellationError()
+            }
+        }
         return ExportSummary(succeeded: ids.count, skipped: 0, failed: 0)
     }
 }

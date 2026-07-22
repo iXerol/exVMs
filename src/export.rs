@@ -203,6 +203,18 @@ pub fn execute_exports(
     skipped: Vec<SkippedRecording>,
     jobs: usize,
 ) -> ExportReport {
+    execute_exports_with_cancel(planned, skipped, jobs, || false)
+}
+
+pub fn execute_exports_with_cancel<F>(
+    planned: Vec<PlannedExport>,
+    skipped: Vec<SkippedRecording>,
+    jobs: usize,
+    is_cancelled: F,
+) -> ExportReport
+where
+    F: Fn() -> bool + Sync,
+{
     let successes = Mutex::new(Vec::new());
     let failures = Mutex::new(Vec::new());
     let jobs = jobs.max(1);
@@ -213,12 +225,17 @@ pub fn execute_exports(
         .expect("failed to build export thread pool");
 
     pool.install(|| {
-        planned.par_iter().for_each(|item| match execute_one(item) {
-            Ok(()) => successes.lock().unwrap().push(item.clone()),
-            Err(err) => failures.lock().unwrap().push(ExportFailure {
-                id: item.id,
-                error: err.to_string(),
-            }),
+        planned.par_iter().for_each(|item| {
+            if is_cancelled() {
+                return;
+            }
+            match execute_one(item) {
+                Ok(()) => successes.lock().unwrap().push(item.clone()),
+                Err(err) => failures.lock().unwrap().push(ExportFailure {
+                    id: item.id,
+                    error: err.to_string(),
+                }),
+            }
         });
     });
 
@@ -239,10 +256,17 @@ fn execute_one(item: &PlannedExport) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
     fs::copy(&item.source, &item.target)?;
-    macos::set_export_timestamps(
+    if let Err(err) = macos::set_export_timestamps(
         &item.target,
         time::apple_seconds_to_system_time(item.recorded_at),
-    )?;
+    ) {
+        eprintln!(
+            "exvms export: copied id {} but failed to set timestamps on {}: {}",
+            item.id,
+            item.target.display(),
+            err
+        );
+    }
     Ok(())
 }
 
@@ -1122,6 +1146,27 @@ mod tests {
         )
         .unwrap();
         assert_eq!(planned[0].target, tmp.path().join("out").join("One.wav"));
+    }
+
+    #[test]
+    fn timestamp_failure_does_not_mark_copied_file_as_failed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("one.wav");
+        let target = tmp.path().join("out").join("One.wav");
+        create_valid_wav(&source);
+        let planned = vec![PlannedExport {
+            id: 1,
+            title: "One".to_string(),
+            source,
+            target: target.clone(),
+            recorded_at: -978_307_201.0,
+        }];
+
+        let report = execute_exports(planned, vec![], 1);
+
+        assert_eq!(report.successes.len(), 1);
+        assert!(report.failures.is_empty());
+        assert!(target.exists());
     }
 
     #[test]

@@ -78,13 +78,22 @@ struct ContentView: View {
                 Label("action.output", systemImage: "folder")
             }
             .accessibilityLabel("accessibility.output.choose_directory")
-            Button {
-                viewModel.exportSelection()
-            } label: {
-                Label("action.export", systemImage: "square.and.arrow.up")
+            if viewModel.isExporting {
+                Button {
+                    viewModel.cancelExport()
+                } label: {
+                    Label("action.cancel_export", systemImage: "xmark.circle")
+                }
+                .keyboardShortcut(.cancelAction)
+            } else {
+                Button {
+                    viewModel.exportSelection()
+                } label: {
+                    Label("action.export", systemImage: "square.and.arrow.up")
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!viewModel.canExportSelection)
             }
-            .keyboardShortcut(.defaultAction)
-            .disabled(!viewModel.canExportSelection || viewModel.isExporting)
         }
         .padding(14)
     }
