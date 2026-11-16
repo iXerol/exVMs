@@ -34,13 +34,16 @@ unix_seconds = ZDATE + 978307200
 
 Relative `ZPATH` values are resolved under the active Voice Memos Recordings directory. Absolute `ZPATH` values are only used when they can be safely mapped back into that selected Recordings directory, including mounted backup volumes such as `/Volumes/<name>/Users/<user>/...`.
 
-The default discovery order is:
+| macOS version | Recordings directory | Storage |
+| --- | --- | --- |
+| Sonoma 14 and later | `~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings` | Voice Memos group container. [Sonoma report](https://www.reddit.com/r/techsupport/comments/17h1piw/) |
+| Ventura 13 | `~/Library/Containers/com.apple.VoiceMemos/Data/Library/Application Support/Recordings` | Voice Memos app sandbox. [Ventura report](https://apple.stackexchange.com/a/464156) |
+| Catalina 10.15 \~ Monterey 12 | `~/Library/Application Support/com.apple.voicememos/Recordings` | Voice Memos Application Support store. [Catalina and Big Sur](https://www.fireebok.com/resource/where-are-voice-memos-stored-on-the-mac.html), [Monterey](https://apple.stackexchange.com/questions/444538/vlc-for-macos-shows-playlist-title-name-that-is-nowhere-to-be-found) |
+| Mojave 10.14 and earlier, with iTunes sync | `~/Music/iTunes/iTunes Media/Voice Memos/` | Synced `.m4a` files that can be copied directly in Finder. [iTunes sync path](https://www.fireebok.com/resource/where-are-voice-memos-stored-on-the-mac.html) |
 
-```text
-~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings
-~/Library/Containers/Voice Memos/Data/Library/Application Support/Recordings
-~/Library/Application Support/com.apple.voicememos/Recordings
-```
+exVMs searches the three Voice Memos database locations in the order shown, regardless of the macOS version. The built-in Voice Memos app on Mojave 10.14 has also been reported to use the Application Support path. [Mojave report](https://apple.stackexchange.com/questions/340647/where-are-the-audio-files-of-voice-memos-stored-on-macos-mojave)
+
+Finder can display the sandbox container as `Voice Memos`. The filesystem path uses the bundle ID `com.apple.VoiceMemos`. [Apple file system documentation](https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide/FileSystemOverview/FileSystemOverview.html)
 
 Cloud-only or incomplete recordings are classified as `needs-download`. Paths that resolve outside the selected Recordings directory are classified as `outside-recordings-dir`.
 

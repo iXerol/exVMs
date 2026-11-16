@@ -4,6 +4,15 @@ use std::path::{Path, PathBuf};
 
 use crate::{ExvmsError, Result, db};
 
+pub(crate) const RECORDINGS_DIRECTORY_SUFFIXES: [&str; 3] = [
+    // macOS Sonoma 14 and later.
+    "Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings",
+    // macOS Ventura 13.
+    "Library/Containers/com.apple.VoiceMemos/Data/Library/Application Support/Recordings",
+    // macOS Catalina 10.15 ~ Monterey 12. Also reported for the Mojave app.
+    "Library/Application Support/com.apple.voicememos/Recordings",
+];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VoiceMemosStore {
     pub recordings_dir: PathBuf,
@@ -79,11 +88,10 @@ pub fn discover_from_home(home: PathBuf) -> Result<VoiceMemosStore> {
 }
 
 pub fn candidate_recording_dirs(home: &Path) -> Vec<PathBuf> {
-    vec![
-        home.join("Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings"),
-        home.join("Library/Containers/Voice Memos/Data/Library/Application Support/Recordings"),
-        home.join("Library/Application Support/com.apple.voicememos/Recordings"),
-    ]
+    RECORDINGS_DIRECTORY_SUFFIXES
+        .iter()
+        .map(|suffix| home.join(suffix))
+        .collect()
 }
 
 pub fn candidate_database_paths(recordings_dir: &Path) -> Vec<PathBuf> {
@@ -138,7 +146,7 @@ mod tests {
         assert_eq!(
             dirs[1],
             PathBuf::from(
-                "/Users/example/Library/Containers/Voice Memos/Data/Library/Application Support/Recordings"
+                "/Users/example/Library/Containers/com.apple.VoiceMemos/Data/Library/Application Support/Recordings"
             )
         );
         assert_eq!(
@@ -172,6 +180,24 @@ mod tests {
         let store = discover_from_home(home.to_path_buf()).unwrap();
         assert_eq!(store.recordings_dir, legacy);
         assert_eq!(store.db_path.file_name().unwrap(), "Recordings.db");
+    }
+
+    #[test]
+    fn discovery_finds_database_in_bundle_id_container() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        let sandbox = home.join(
+            "Library/Containers/com.apple.VoiceMemos/Data/Library/Application Support/Recordings",
+        );
+        let legacy = home.join("Library/Application Support/com.apple.voicememos/Recordings");
+        fs::create_dir_all(&sandbox).unwrap();
+        fs::create_dir_all(&legacy).unwrap();
+        let db_path = sandbox.join("Recordings.db");
+        create_legacy_recordings_db(&db_path, true);
+
+        let store = discover_from_home(home.to_path_buf()).unwrap();
+        assert_eq!(store.recordings_dir, sandbox);
+        assert_eq!(store.db_path, db_path);
     }
 
     #[test]

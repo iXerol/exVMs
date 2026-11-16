@@ -36,6 +36,15 @@ final class ExvmsCancellationToken: @unchecked Sendable {
 }
 
 struct VoiceMemosStore: Equatable {
+    static let recordingsDirectorySuffixes = [
+        // macOS Sonoma 14 and later.
+        ["Library", "Group Containers", "group.com.apple.VoiceMemos.shared", "Recordings"],
+        // macOS Ventura 13.
+        ["Library", "Containers", "com.apple.VoiceMemos", "Data", "Library", "Application Support", "Recordings"],
+        // macOS Catalina 10.15 ~ Monterey 12. Also reported for the Mojave app.
+        ["Library", "Application Support", "com.apple.voicememos", "Recordings"],
+    ]
+
     var recordingsDirectory: FilePath
     var databasePath: FilePath
 }
@@ -315,7 +324,7 @@ struct RustExvmsClient: ExvmsClient {
         originalURL: URL
     ) -> URL? {
         let components = originalURL.pathComponents.filter { $0 != "/" }
-        for suffix in knownRecordingsSuffixes {
+        for suffix in VoiceMemosStore.recordingsDirectorySuffixes {
             guard let index = components.firstSubsequenceIndex(of: suffix) else {
                 continue
             }
@@ -327,12 +336,6 @@ struct RustExvmsClient: ExvmsClient {
         }
         return nil
     }
-
-    private static let knownRecordingsSuffixes = [
-        ["Library", "Group Containers", "group.com.apple.VoiceMemos.shared", "Recordings"],
-        ["Library", "Containers", "Voice Memos", "Data", "Library", "Application Support", "Recordings"],
-        ["Library", "Application Support", "com.apple.voicememos", "Recordings"],
-    ]
 }
 
 private extension Array where Element: Equatable {
