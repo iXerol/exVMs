@@ -64,6 +64,8 @@ Recordings that are missing locally, still need download, or resolve outside the
 
 If macOS denies terminal access to Voice Memos data, grant Full Disk Access to the terminal app you use to run `exvms`.
 
+See the [Voice Memos storage paths by macOS version](docs/development.md#voice-memos-stores) if `exvms view` cannot find the database.
+
 ## macOS App
 
 The app lists the current Voice Memos storage location and recordings in a table.

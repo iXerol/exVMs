@@ -760,11 +760,9 @@ final class RecordingsViewModel {
 
     private static func candidateVoiceMemosDirectories() -> [URL] {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        return [
-            home.appendingPathComponent("Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings", isDirectory: true),
-            home.appendingPathComponent("Library/Containers/Voice Memos/Data/Library/Application Support/Recordings", isDirectory: true),
-            home.appendingPathComponent("Library/Application Support/com.apple.voicememos/Recordings", isDirectory: true),
-        ]
+        return VoiceMemosStore.recordingsDirectorySuffixes.map { suffix in
+            home.appendingPathComponent(suffix.joined(separator: "/"), isDirectory: true)
+        }
     }
 
     private static func isPermissionDenied(_ error: Error) -> Bool {

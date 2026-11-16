@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use crate::db::{Recording, RecordingPathKind};
 use crate::macos;
 use crate::sanitize;
+use crate::storage::RECORDINGS_DIRECTORY_SUFFIXES;
 use crate::template::FilenameTemplate;
 use crate::time;
 use crate::{ExvmsError, Result};
@@ -601,11 +602,12 @@ fn relative_tail_after_recordings_dir(original: &Path, recordings_dir: &Path) ->
         return None;
     }
 
-    for suffix in known_recordings_suffixes() {
-        let Some(index) = find_subsequence(&original_components, suffix) else {
+    for suffix in RECORDINGS_DIRECTORY_SUFFIXES {
+        let suffix_components: Vec<_> = Path::new(suffix).iter().collect();
+        let Some(index) = find_subsequence(&original_components, &suffix_components) else {
             continue;
         };
-        let tail = &original_components[index + suffix.len()..];
+        let tail = &original_components[index + suffix_components.len()..];
         if tail.is_empty() {
             return None;
         }
@@ -616,32 +618,6 @@ fn relative_tail_after_recordings_dir(original: &Path, recordings_dir: &Path) ->
     }
 
     None
-}
-
-fn known_recordings_suffixes() -> &'static [&'static [&'static str]] {
-    &[
-        &[
-            "Library",
-            "Group Containers",
-            "group.com.apple.VoiceMemos.shared",
-            "Recordings",
-        ],
-        &[
-            "Library",
-            "Containers",
-            "Voice Memos",
-            "Data",
-            "Library",
-            "Application Support",
-            "Recordings",
-        ],
-        &[
-            "Library",
-            "Application Support",
-            "com.apple.voicememos",
-            "Recordings",
-        ],
-    ]
 }
 
 fn normal_components(path: &Path) -> Vec<OsString> {
@@ -660,12 +636,12 @@ fn user_component(components: &[OsString]) -> Option<&OsString> {
         .map(|window| &window[1])
 }
 
-fn find_subsequence(components: &[OsString], suffix: &[&str]) -> Option<usize> {
+fn find_subsequence(components: &[OsString], suffix: &[&OsStr]) -> Option<usize> {
     components.windows(suffix.len()).position(|window| {
         window
             .iter()
             .zip(suffix)
-            .all(|(component, expected)| component == OsStr::new(expected))
+            .all(|(component, expected)| component == *expected)
     })
 }
 
@@ -896,6 +872,38 @@ mod tests {
         .unwrap();
         assert!(skipped.is_empty());
         assert_eq!(planned[0].source, recordings_dir.join("legacy.wav"));
+    }
+
+    #[test]
+    fn sandbox_absolute_path_maps_nested_recording_to_backup() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sandbox_suffix =
+            "Library/Containers/com.apple.VoiceMemos/Data/Library/Application Support/Recordings";
+        let recordings_dir = tmp
+            .path()
+            .join("Volumes/Backup/Users/example")
+            .join(sandbox_suffix);
+        let relative = "Folder/memo.wav";
+        fs::create_dir_all(recordings_dir.join("Folder")).unwrap();
+        let source = recordings_dir.join(relative);
+        create_valid_wav(&source);
+        let row = recording(
+            1,
+            "Memo",
+            &format!("/Users/example/{sandbox_suffix}/{relative}"),
+            None,
+        );
+
+        let (planned, skipped) = plan_exports(
+            &recordings_dir,
+            &tmp.path().join("out"),
+            &[row],
+            None,
+            SelectionMode::All,
+        )
+        .unwrap();
+        assert!(skipped.is_empty());
+        assert_eq!(planned[0].source, source);
     }
 
     #[test]
